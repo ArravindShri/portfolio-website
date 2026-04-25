@@ -192,6 +192,23 @@ function HeroSection() {
                 Data as of {fmtRefreshDate(lastUpdated) ?? '—'}
               </span>
             </div>
+            <div className="repo-cta">
+              <a
+                href="https://github.com/ArravindShri/energy-security-intelligence"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="repo-link"
+              >
+                <span className="repo-icon">↗</span>
+                <span className="repo-text">
+                  <span className="repo-label">GitHub · Source</span>
+                  <span className="repo-desc">
+                    EIA + Twelve Data + World Bank feeds, Fabric warehouse, dbt
+                    models, FastAPI backend, React frontend
+                  </span>
+                </span>
+              </a>
+            </div>
           </div>
           <div className="hero-kpis">
             <div className="kpi">

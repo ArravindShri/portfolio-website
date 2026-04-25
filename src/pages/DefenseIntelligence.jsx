@@ -215,6 +215,23 @@ function OverviewSection() {
                 Dataset through {maxYear ?? '—'}
               </span>
             </div>
+            <div className="repo-cta">
+              <a
+                href="https://github.com/ArravindShri/Global-Defense-Conflict-Intelligence"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="repo-link"
+              >
+                <span className="repo-icon">↗</span>
+                <span className="repo-text">
+                  <span className="repo-label">GitHub · Source</span>
+                  <span className="repo-desc">
+                    SIPRI + ACLED pipeline, medallion architecture, 23 tables,
+                    Tableau story
+                  </span>
+                </span>
+              </a>
+            </div>
           </div>
           <div className="hero-kpis">
             <div className="kpi">

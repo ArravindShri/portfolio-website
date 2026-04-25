@@ -328,3 +328,44 @@
 }
 .foot-status .row .good { color: var(--good); }
 .foot-status .row .accent { color: var(--accent); }
+
+/* ————— Repo CTA · shared across project hero sections ————— */
+.repo-cta {
+  margin-top: 12px;
+}
+.repo-link {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 16px;
+  border: 1px solid var(--rule);
+  background: var(--bg-2);
+  text-decoration: none;
+  font-family: var(--mono);
+  transition: border-color 0.2s;
+}
+.repo-link:hover {
+  border-color: var(--accent);
+}
+.repo-icon {
+  color: var(--accent);
+  font-size: 14px;
+  line-height: 1;
+  margin-top: 2px;
+}
+.repo-label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.repo-desc {
+  display: block;
+  font-size: 10.5px;
+  color: var(--ink-3);
+  margin-top: 2px;
+  line-height: 1.4;
+  max-width: 56ch;
+  text-wrap: pretty;
+}

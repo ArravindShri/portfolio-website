@@ -189,6 +189,23 @@ function OverviewSection() {
               <span className="sep">—</span>
               <span className="ts">Data as of {fmtRefreshDate(lastUpdated) ?? '—'}</span>
             </div>
+            <div className="repo-cta">
+              <a
+                href="https://github.com/ArravindShri/-Global-Investment-Portfolio-Analytics"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="repo-link"
+              >
+                <span className="repo-icon">↗</span>
+                <span className="repo-text">
+                  <span className="repo-label">GitHub · Source</span>
+                  <span className="repo-desc">
+                    SQL Server → Fabric migration, dbt models, Gold layer
+                    stored procedures, daily refresh pipeline
+                  </span>
+                </span>
+              </a>
+            </div>
           </div>
           <div className="hero-kpis">
             <div className="kpi">
