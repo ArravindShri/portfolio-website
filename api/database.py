@@ -21,6 +21,36 @@ from config import settings
 
 log = logging.getLogger("fabric.db")
 
+
+class FabricRestError(RuntimeError):
+    """Raised by RestBackend with structured detail for /api/health.
+
+    `str(err)` includes status code, URL, and a body snippet so operators
+    can diagnose Fabric REST issues straight from the health endpoint
+    without digging through Vercel logs.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        url: str | None = None,
+        status_code: int | None = None,
+        body: str | None = None,
+    ) -> None:
+        self.url = url
+        self.status_code = status_code
+        self.body = body
+        parts = [message]
+        if status_code is not None:
+            parts.append(f"status={status_code}")
+        if url is not None:
+            parts.append(f"url={url}")
+        if body:
+            parts.append(f"body={body}")
+        super().__init__(" | ".join(parts))
+
+
 # ----------------------------------------------------------------------------
 # Backend implementations — instances are bound to a single (endpoint, db).
 # ----------------------------------------------------------------------------
@@ -32,12 +62,16 @@ class FabricBackend:
     def query(self, sql: str, params: Sequence[Any] | None = None) -> list[dict[str, Any]]:
         raise NotImplementedError
 
-    def healthcheck(self) -> bool:
+    def healthcheck(self) -> tuple[bool, str | None]:
+        """Returns (ok, error_message). The message is None on success and
+        carries the full exception detail on failure so the /api/health
+        endpoint can surface it to the operator."""
         try:
             self.query("SELECT 1 AS ok")
-            return True
-        except Exception:  # noqa: BLE001
-            return False
+            return True, None
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Fabric healthcheck failed: %s", exc)
+            return False, str(exc)
 
 
 class PyodbcBackend(FabricBackend):
@@ -96,35 +130,84 @@ class RestBackend(FabricBackend):
         return f"https://{self._sql_endpoint}/v1.0/warehouses/{self._database}/query"
 
     def query(self, sql: str, params: Sequence[Any] | None = None) -> list[dict[str, Any]]:
+        url = self._query_url()
         bound_sql = _bind_inline_params(sql, params or [])
-        resp = requests.post(
-            self._query_url(),
-            headers={
-                "Authorization": f"Bearer {self._token()}",
-                "Content-Type": "application/json",
-            },
-            json={"query": bound_sql},
-            timeout=20,
-        )
-        resp.raise_for_status()
-        payload = resp.json()
-        # Normalize to list[dict] — Fabric REST returns either {"rows":[...]} or
-        # {"results":[{"rows":[...], "columns":[...]}]} depending on version.
+
+        # 1) Acquire token. Surface azure-identity's auth message verbatim.
+        try:
+            token = self._token()
+        except Exception as exc:  # noqa: BLE001
+            log.error("REST: token acquisition failed for %s: %s", self._database, exc)
+            raise FabricRestError(
+                f"token acquisition failed: {exc}",
+                url=url,
+            ) from exc
+
+        # 2) POST the query.
+        try:
+            resp = requests.post(
+                url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                },
+                json={"query": bound_sql},
+                timeout=20,
+            )
+        except requests.RequestException as exc:
+            log.error("REST: network error POST %s: %s", url, exc)
+            raise FabricRestError(f"network error: {exc}", url=url) from exc
+
+        # 3) Surface non-2xx with the body included — Fabric returns useful
+        #    error JSON we want operators to see in /api/health.
+        if not resp.ok:
+            body_snippet = (resp.text or "")[:600].replace("\n", " ")
+            log.error(
+                "REST: HTTP %s from %s — body=%s", resp.status_code, url, body_snippet
+            )
+            raise FabricRestError(
+                f"HTTP {resp.status_code} {resp.reason or ''}".strip(),
+                url=url,
+                status_code=resp.status_code,
+                body=body_snippet,
+            )
+
+        # 4) Parse JSON. If the response wasn't JSON, include the text.
+        try:
+            payload = resp.json()
+        except ValueError as exc:
+            body_snippet = (resp.text or "")[:600].replace("\n", " ")
+            log.error("REST: non-JSON response from %s: %s", url, body_snippet)
+            raise FabricRestError(
+                f"non-JSON response: {exc}",
+                url=url,
+                status_code=resp.status_code,
+                body=body_snippet,
+            ) from exc
+
+        # 5) Normalize to list[dict].
         if isinstance(payload, list):
             return payload
-        if "rows" in payload and isinstance(payload["rows"], list):
+        if isinstance(payload, dict) and "rows" in payload and isinstance(payload["rows"], list):
             cols = payload.get("columns")
             if cols and payload["rows"] and not isinstance(payload["rows"][0], dict):
                 return [dict(zip(cols, row)) for row in payload["rows"]]
             return payload["rows"]
-        if "results" in payload and payload["results"]:
+        if isinstance(payload, dict) and "results" in payload and payload["results"]:
             r0 = payload["results"][0]
             cols = r0.get("columns") or []
             rows = r0.get("rows") or []
             if rows and not isinstance(rows[0], dict):
                 return [dict(zip(cols, row)) for row in rows]
             return rows
-        return []
+        # Unexpected shape — surface a snippet so it's debuggable.
+        snippet = str(payload)[:300]
+        raise FabricRestError(
+            f"unexpected response shape: {snippet}",
+            url=url,
+            status_code=resp.status_code,
+            body=snippet,
+        )
 
 
 def _bind_inline_params(sql: str, params: Iterable[Any]) -> str:
@@ -236,13 +319,13 @@ class FabricManager:
                 "method": None,
                 "reason": self._reason,
             }
-        ok = backend.healthcheck()
+        ok, err = backend.healthcheck()
         return {
             "name": self.name,
             "configured": self.configured,
             "connected": ok,
             "method": backend.name,
-            "reason": "ok" if ok else "healthcheck failed",
+            "reason": "ok" if ok else (err or "healthcheck failed"),
         }
 
     def reset(self) -> None:
