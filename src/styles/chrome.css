@@ -195,6 +195,62 @@
   height: 1px;
 }
 
+/* ————— Freshness banner (page hero) ————— */
+/* Page-level "this data is fresh / static" stripe shown in the hero, just
+ * below the per-section .meta-row. Two variants: .live (green dot) for
+ * Energy Security (live Fabric warehouse), .static (terracotta diamond)
+ * for Defense Intelligence (static JSON). */
+.freshness-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 7px 12px;
+  border: 1px solid var(--rule);
+  background: var(--bg-1);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--ink-2);
+  text-transform: uppercase;
+  width: fit-content;
+}
+.freshness-banner .lbl {
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+.freshness-banner .sep { color: var(--ink-4); }
+.freshness-banner .ts {
+  color: var(--ink-3);
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-weight: 400;
+}
+.freshness-banner .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--good);
+  box-shadow: 0 0 0 3px rgba(157, 177, 124, 0.16);
+  animation: pulse 2s ease-in-out infinite;
+  flex: 0 0 auto;
+}
+.freshness-banner .diamond {
+  color: var(--accent);
+  font-size: 13px;
+  line-height: 1;
+}
+.freshness-banner.live {
+  border-color: rgba(157, 177, 124, 0.22);
+  background: rgba(157, 177, 124, 0.04);
+}
+.freshness-banner.live .lbl { color: var(--good); }
+.freshness-banner.static {
+  border-color: rgba(218, 119, 86, 0.22);
+  background: rgba(218, 119, 86, 0.04);
+}
+.freshness-banner.static .lbl { color: var(--accent); }
+
 /* ————— Footer ————— */
 .footer {
   border-top: 1px solid var(--rule);

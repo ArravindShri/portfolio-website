@@ -60,6 +60,24 @@ const fmtPct = (v) => {
   return `${n >= 0 ? '+' : ''}${fmtNumber(n)}%`;
 };
 
+// Format an ISO timestamp as "Apr 25, 2026 · 1:23 PM" for the freshness
+// banner. Returns null if the input doesn't parse.
+const fmtRefreshTs = (iso) => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const date = d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+  const time = d.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  return `${date} · ${time}`;
+};
+
 // ---------------------------------------------------------------------------
 // Status chrome.
 // ---------------------------------------------------------------------------
@@ -168,6 +186,14 @@ function HeroSection() {
               <span className="meta-sep">·</span>
               <span className="meta">
                 P3 warehouse · gold_energy_overview · {kpis ? `${kpis.rows} rows` : '—'}
+              </span>
+            </div>
+            <div className="freshness-banner live" role="status">
+              <span className="dot" aria-hidden />
+              <span className="lbl">Fabric · Live</span>
+              <span className="sep">—</span>
+              <span className="ts">
+                Last refreshed {fmtRefreshTs(lastUpdated) ?? '—'}
               </span>
             </div>
           </div>

@@ -139,10 +139,24 @@ const tooltipStyle = {
 const tooltipLabelStyle = { color: C.ink3, letterSpacing: '0.06em' };
 
 // ===========================================================================
-//  02.1 — OVERVIEW   (trade_overview.json)
+//  02.1 — OVERVIEW   (trade_overview.json + conflict_events.json for year)
 // ===========================================================================
 function OverviewSection() {
   const { data, loading, error, source, lastUpdated } = useApi('/api/defense/overview');
+  // Pulled here to compute the most recent year in the dataset for the
+  // freshness banner. The §02.5 section also fetches this — same URL, the
+  // browser caches it after the first hit.
+  const conflict = useApi('/api/defense/conflict');
+
+  const maxYear = useMemo(() => {
+    if (!Array.isArray(conflict.data)) return null;
+    let m = -Infinity;
+    for (const r of conflict.data) {
+      const y = toNum(r.year);
+      if (y != null && y > m) m = y;
+    }
+    return m === -Infinity ? null : m;
+  }, [conflict.data]);
 
   const { kpis, topExporters } = useMemo(() => {
     if (!Array.isArray(data) || data.length === 0)
@@ -191,6 +205,14 @@ function OverviewSection() {
               <span className="meta-sep">·</span>
               <span className="meta">
                 static JSON · trade_overview · {kpis ? `${kpis.countries} countries` : '—'}
+              </span>
+            </div>
+            <div className="freshness-banner static" role="status">
+              <span className="diamond" aria-hidden>◇</span>
+              <span className="lbl">Static</span>
+              <span className="sep">·</span>
+              <span className="ts">
+                Dataset through {maxYear ?? '—'}
               </span>
             </div>
           </div>
