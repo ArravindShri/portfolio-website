@@ -1,7 +1,5 @@
 import { useMemo, useState } from 'react';
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -9,6 +7,7 @@ import {
   Legend,
   Line,
   LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -18,7 +17,7 @@ import SectionTag from '../components/SectionTag.jsx';
 import useApi from '../lib/useApi.js';
 
 // ---------------------------------------------------------------------------
-// Theme tokens used by the charts. Mirrors src/styles/tokens.css.
+// Theme tokens used by charts. Mirrors src/styles/tokens.css.
 // ---------------------------------------------------------------------------
 const C = {
   ink: '#F2EDE4',
@@ -36,30 +35,14 @@ const C = {
 };
 const SERIES_COLORS = [C.accent, C.good, C.warn, '#7BA7C9', '#B98AC9', C.bad];
 
-// ---------------------------------------------------------------------------
-// Field-name helpers — Fabric column names vary, so we look for the most
-// common candidates and fall back to whatever's present.
-// ---------------------------------------------------------------------------
-const pickKey = (row, candidates) =>
-  candidates.find((k) => row && Object.prototype.hasOwnProperty.call(row, k));
-
-const numericKeys = (row) =>
-  row
-    ? Object.keys(row).filter((k) => {
-        const v = row[k];
-        return typeof v === 'number' && Number.isFinite(v);
-      })
-    : [];
-
 const fmtNumber = (v, opts = {}) => {
   if (v == null || Number.isNaN(v)) return '—';
   return Intl.NumberFormat('en-US', { maximumFractionDigits: 2, ...opts }).format(v);
 };
-
 const fmtPct = (v) => (v == null ? '—' : `${v >= 0 ? '+' : ''}${fmtNumber(v)}%`);
 
 // ---------------------------------------------------------------------------
-// Status chrome: shows live | cache | error and a last-updated timestamp.
+// Status chrome.
 // ---------------------------------------------------------------------------
 function DataBadge({ source, lastUpdated, error, loading }) {
   if (loading) return <span className="data-badge loading">Loading…</span>;
@@ -99,64 +82,46 @@ function StatePane({ loading, error, empty, children }) {
     return (
       <div className="pane-state empty">
         <div className="msg">No rows returned</div>
-        <div className="hint">The query succeeded but the warehouse view is empty.</div>
+        <div className="hint">The query succeeded but the gold view is empty.</div>
       </div>
     );
   return children;
 }
 
-// ---------------------------------------------------------------------------
-// Shared chart frame — the dotted-grid + axis style that recurs across panels.
-// ---------------------------------------------------------------------------
 const chartGrid = <CartesianGrid stroke={C.rule} strokeDasharray="2 4" vertical={false} />;
 const axisTickStyle = {
   fill: C.ink3,
   fontSize: 10.5,
-  fontFamily:
-    "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace",
+  fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace",
   letterSpacing: '0.04em',
 };
 const tooltipStyle = {
   background: C.bg2,
   border: `1px solid ${C.rule}`,
   borderRadius: 0,
-  fontFamily:
-    "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace",
+  fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace",
   fontSize: 11,
   color: C.ink,
 };
 const tooltipLabelStyle = { color: C.ink3, letterSpacing: '0.06em' };
 
 // ===========================================================================
-//  SECTION 01 — Hero / KPIs
+//  03.1 — Hero / KPIs   (gold_energy_overview)
 // ===========================================================================
 function HeroSection() {
   const { data, loading, error, source, lastUpdated } = useApi('/api/energy/overview');
 
   const kpis = useMemo(() => {
     if (!Array.isArray(data) || data.length === 0) return null;
-    const sample = data[0];
-    const yearKey = pickKey(sample, ['year', 'reporting_year']);
-    const productKey = pickKey(sample, ['energy_product', 'product', 'commodity']);
-    const countryKey = pickKey(sample, ['country_id', 'country', 'iso3']);
-    const numCols = numericKeys(sample);
-
-    const years = yearKey ? new Set(data.map((r) => r[yearKey]).filter(Boolean)) : new Set();
-    const products = productKey
-      ? new Set(data.map((r) => r[productKey]).filter(Boolean))
-      : new Set();
-    const countries = countryKey
-      ? new Set(data.map((r) => r[countryKey]).filter(Boolean))
-      : new Set();
-
+    const years = new Set(data.map((r) => r.year).filter((y) => y != null));
+    const products = new Set(data.map((r) => r.energy_product).filter(Boolean));
+    const countries = new Set(data.map((r) => r.country_id).filter(Boolean));
     return {
       countries: countries.size,
       products: products.size,
-      years: years.size,
       yearMin: years.size ? Math.min(...years) : null,
       yearMax: years.size ? Math.max(...years) : null,
       rows: data.length,
-      numCols: numCols.length,
     };
   }, [data]);
 
@@ -199,9 +164,7 @@ function HeroSection() {
             <div className="kpi">
               <div className="k">Year span</div>
               <div className="v">
-                {kpis && kpis.yearMin
-                  ? `${kpis.yearMin}–${kpis.yearMax}`
-                  : '—'}
+                {kpis && kpis.yearMin ? `${kpis.yearMin}–${kpis.yearMax}` : '—'}
               </div>
             </div>
             <div className="kpi">
@@ -216,36 +179,34 @@ function HeroSection() {
 }
 
 // ===========================================================================
-//  SECTION 02 — Price benchmarks
+//  03.2 — Price benchmarks   (gold_energy_prices)
+//  x = period (YYYY-MM string), series per energy_product, value = avg_monthly_price.
 // ===========================================================================
 function PricesSection() {
   const { data, loading, error, source, lastUpdated } = useApi('/api/energy/prices');
   const [selected, setSelected] = useState(null);
 
-  const { products, series } = useMemo(() => {
-    if (!Array.isArray(data) || data.length === 0) return { products: [], series: [] };
-    const sample = data[0];
-    const prodKey = pickKey(sample, ['energy_product', 'product', 'commodity']);
-    const yearKey = pickKey(sample, ['year', 'date', 'period']);
-    const priceKey = pickKey(sample, ['price', 'avg_price', 'value', 'close', 'usd']);
-    if (!prodKey || !yearKey || !priceKey) return { products: [], series: [] };
-    const prods = Array.from(new Set(data.map((r) => r[prodKey]).filter(Boolean)));
-    // Pivot to {year, [product]: price}.
-    const byYear = new Map();
+  const { products, series, unit } = useMemo(() => {
+    if (!Array.isArray(data) || data.length === 0) return { products: [], series: [], unit: '' };
+    const prods = Array.from(new Set(data.map((r) => r.energy_product).filter(Boolean))).sort();
+    const byPeriod = new Map();
     for (const r of data) {
-      const y = r[yearKey];
-      const p = r[prodKey];
-      const v = r[priceKey];
-      if (y == null || p == null || typeof v !== 'number') continue;
-      if (!byYear.has(y)) byYear.set(y, { year: y });
-      byYear.get(y)[p] = v;
+      const x = r.period;
+      const p = r.energy_product;
+      const v = r.avg_monthly_price;
+      if (x == null || p == null || typeof v !== 'number') continue;
+      if (!byPeriod.has(x)) byPeriod.set(x, { period: x });
+      byPeriod.get(x)[p] = v;
     }
-    const sorted = Array.from(byYear.values()).sort((a, b) => (a.year > b.year ? 1 : -1));
-    return { products: prods, series: sorted };
+    const sorted = Array.from(byPeriod.values()).sort((a, b) =>
+      String(a.period) > String(b.period) ? 1 : -1,
+    );
+    const unit = data.find((r) => r.price_unit)?.price_unit || '';
+    return { products: prods, series: sorted, unit };
   }, [data]);
 
   const visible = selected ?? products;
-  const isEmpty = !loading && !error && (!series || series.length === 0);
+  const isEmpty = !loading && !error && series.length === 0;
 
   return (
     <section className="section energy-prices">
@@ -270,12 +231,15 @@ function PricesSection() {
             {products.map((p) => (
               <button
                 key={p}
-                className={`chip ${Array.isArray(selected) && selected.includes(p) && selected.length === 1 ? 'on' : ''}`}
+                className={`chip ${
+                  Array.isArray(selected) && selected.length === 1 && selected[0] === p ? 'on' : ''
+                }`}
                 onClick={() => setSelected([p])}
               >
                 {p}
               </button>
             ))}
+            {unit && <span className="hint">unit: {unit}</span>}
           </div>
         )}
 
@@ -284,7 +248,7 @@ function PricesSection() {
             <ResponsiveContainer width="100%" height={360}>
               <LineChart data={series} margin={{ top: 16, right: 24, left: 8, bottom: 8 }}>
                 {chartGrid}
-                <XAxis dataKey="year" stroke={C.ink4} tick={axisTickStyle} />
+                <XAxis dataKey="period" stroke={C.ink4} tick={axisTickStyle} />
                 <YAxis stroke={C.ink4} tick={axisTickStyle} />
                 <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} />
                 <Legend wrapperStyle={{ fontFamily: axisTickStyle.fontFamily, fontSize: 11 }} />
@@ -309,31 +273,27 @@ function PricesSection() {
 }
 
 // ===========================================================================
-//  SECTION 03 — Imports & exports (trade flows)
+//  03.3 — Trade flows   (gold_import_export_analysis)
+//  Bars: import_volume vs export_volume aggregated per country_name.
 // ===========================================================================
 function ImportsSection() {
   const { data, loading, error, source, lastUpdated } = useApi('/api/energy/imports');
 
-  const { rows, importKey, exportKey } = useMemo(() => {
-    if (!Array.isArray(data) || data.length === 0) return { rows: [] };
-    const sample = data[0];
-    const countryKey = pickKey(sample, ['country_name', 'country', 'country_id']);
-    const importKey = pickKey(sample, ['imports', 'total_imports', 'imports_value']);
-    const exportKey = pickKey(sample, ['exports', 'total_exports', 'exports_value']);
-    if (!countryKey || (!importKey && !exportKey)) return { rows: [] };
-    // Aggregate by country: sum imports/exports across years/products.
+  const { rows, unit } = useMemo(() => {
+    if (!Array.isArray(data) || data.length === 0) return { rows: [], unit: '' };
     const acc = new Map();
     for (const r of data) {
-      const c = r[countryKey];
+      const c = r.country_name;
       if (!c) continue;
       if (!acc.has(c)) acc.set(c, { country: c, imports: 0, exports: 0 });
-      if (importKey && typeof r[importKey] === 'number') acc.get(c).imports += r[importKey];
-      if (exportKey && typeof r[exportKey] === 'number') acc.get(c).exports += r[exportKey];
+      if (typeof r.import_volume === 'number') acc.get(c).imports += r.import_volume;
+      if (typeof r.export_volume === 'number') acc.get(c).exports += r.export_volume;
     }
     const sorted = Array.from(acc.values())
-      .sort((a, b) => Math.abs(b.imports - b.exports) - Math.abs(a.imports - a.exports))
+      .sort((a, b) => b.imports + b.exports - (a.imports + a.exports))
       .slice(0, 12);
-    return { rows: sorted, importKey, exportKey };
+    const unit = data.find((r) => r.volume_unit)?.volume_unit || '';
+    return { rows: sorted, unit };
   }, [data]);
 
   const isEmpty = !loading && !error && rows.length === 0;
@@ -341,10 +301,14 @@ function ImportsSection() {
   return (
     <section className="section energy-imports">
       <div className="container">
-        <SectionTag num="03.3" label="Trade flows · Imports vs exports" path="/ api / energy / imports" />
+        <SectionTag
+          num="03.3"
+          label="Trade flows · Imports vs exports"
+          path="/ api / energy / imports"
+        />
         <div className="panel-head">
           <h2>
-            Who buys, <em>who sells</em> — net positions across the top movers.
+            Who buys, <em>who sells</em> — top 12 by total volume.
           </h2>
           <DataBadge source={source} lastUpdated={lastUpdated} error={error} loading={loading} />
         </div>
@@ -357,7 +321,16 @@ function ImportsSection() {
                 margin={{ top: 16, right: 24, left: 24, bottom: 8 }}
               >
                 {chartGrid}
-                <XAxis type="number" stroke={C.ink4} tick={axisTickStyle} />
+                <XAxis
+                  type="number"
+                  stroke={C.ink4}
+                  tick={axisTickStyle}
+                  label={
+                    unit
+                      ? { value: unit, position: 'insideBottom', offset: -4, fill: C.ink4, fontSize: 10 }
+                      : undefined
+                  }
+                />
                 <YAxis
                   type="category"
                   dataKey="country"
@@ -367,8 +340,8 @@ function ImportsSection() {
                 />
                 <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} />
                 <Legend wrapperStyle={{ fontFamily: axisTickStyle.fontFamily, fontSize: 11 }} />
-                {importKey && <Bar dataKey="imports" fill={C.accent} name="Imports" />}
-                {exportKey && <Bar dataKey="exports" fill={C.good} name="Exports" />}
+                <Bar dataKey="imports" fill={C.accent} name="Imports" />
+                <Bar dataKey="exports" fill={C.good} name="Exports" />
               </BarChart>
             </ResponsiveContainer>
           </StatePane>
@@ -379,32 +352,33 @@ function ImportsSection() {
 }
 
 // ===========================================================================
-//  SECTION 04 — Crisis stress tests
+//  03.4 — Crisis stress tests   (gold_crisis_analysis)
+//  Top 8 by |crisis_return_pct|.
 // ===========================================================================
 function CrisisSection() {
   const { data, loading, error, source, lastUpdated } = useApi('/api/energy/crisis');
 
   const cards = useMemo(() => {
     if (!Array.isArray(data) || data.length === 0) return [];
-    const sample = data[0];
-    const nameKey = pickKey(sample, ['crisis_name', 'crisis_id', 'event']);
-    const typeKey = pickKey(sample, ['asset_type', 'category', 'asset_class']);
-    const beforeKey = pickKey(sample, ['before_value', 'price_before', 'pre']);
-    const afterKey = pickKey(sample, ['after_value', 'price_after', 'post']);
-    const pctKey = pickKey(sample, ['change_pct', 'pct_change', 'change_percent']);
-    if (!nameKey) return [];
-    return data.slice(0, 8).map((r, idx) => ({
-      id: idx,
-      name: r[nameKey],
-      asset: typeKey ? r[typeKey] : '',
-      before: beforeKey ? r[beforeKey] : null,
-      after: afterKey ? r[afterKey] : null,
-      pct:
-        pctKey && typeof r[pctKey] === 'number'
-          ? r[pctKey]
-          : beforeKey && afterKey && typeof r[beforeKey] === 'number' && typeof r[afterKey] === 'number'
-          ? ((r[afterKey] - r[beforeKey]) / r[beforeKey]) * 100
-          : null,
+    const ranked = [...data]
+      .filter((r) => typeof r.crisis_return_pct === 'number')
+      .sort(
+        (a, b) =>
+          Math.abs(b.crisis_return_pct ?? 0) - Math.abs(a.crisis_return_pct ?? 0),
+      );
+    return ranked.slice(0, 8).map((r, i) => ({
+      id: `${r.crisis_id || r.crisis_name}-${r.ticker || i}`,
+      crisis: r.crisis_name,
+      ticker: r.ticker,
+      company: r.company_name,
+      asset: r.asset_type,
+      category: r.category,
+      before: r.pre_crisis_price,
+      after: r.post_crisis_price,
+      pct: r.crisis_return_pct,
+      drawdown: r.max_drawdown_pct,
+      recovered: r.has_recovered,
+      recoveryDays: r.recovery_days,
     }));
   }, [data]);
 
@@ -425,12 +399,12 @@ function CrisisSection() {
           <StatePane loading={loading} error={error} empty={isEmpty}>
             <div className="crisis-grid">
               {cards.map((c) => {
-                const dir = c.pct != null && c.pct >= 0 ? 'up' : 'dn';
+                const dir = c.pct >= 0 ? 'up' : 'dn';
                 return (
                   <article key={c.id} className={`crisis-card ${dir}`}>
                     <div className="ch">
-                      <span className="title">{c.name}</span>
-                      {c.asset && <span className="asset">{c.asset}</span>}
+                      <span className="title">{c.crisis}</span>
+                      <span className="asset">{c.ticker}{c.asset ? ` · ${c.asset}` : ''}</span>
                     </div>
                     <div className="cv">
                       <div className="delta">{fmtPct(c.pct)}</div>
@@ -449,6 +423,18 @@ function CrisisSection() {
                         }}
                       />
                     </div>
+                    <div className="crisis-foot">
+                      {c.drawdown != null && (
+                        <span>max drawdown {fmtPct(c.drawdown)}</span>
+                      )}
+                      {c.recovered != null && (
+                        <span className={c.recovered ? 'good' : 'warn'}>
+                          {c.recovered
+                            ? `recovered · ${fmtNumber(c.recoveryDays)}d`
+                            : 'not recovered'}
+                        </span>
+                      )}
+                    </div>
                   </article>
                 );
               })}
@@ -461,148 +447,156 @@ function CrisisSection() {
 }
 
 // ===========================================================================
-//  SECTION 05 — Energy equities
+//  03.5 — Energy equities   (gold_stock_performance)
+//  This view is a snapshot per ticker (no time series), so we show a
+//  horizontal bar chart of yoy_return_pct, sorted, colored by sign.
 // ===========================================================================
 function StocksSection() {
   const { data, loading, error, source, lastUpdated } = useApi('/api/energy/stocks');
   const [category, setCategory] = useState('All');
+  const [sortDir, setSortDir] = useState('top'); // 'top' | 'bottom'
 
-  const { categories, byTicker } = useMemo(() => {
-    if (!Array.isArray(data) || data.length === 0) return { categories: [], byTicker: {} };
-    const sample = data[0];
-    const tickerKey = pickKey(sample, ['ticker', 'symbol', 'asset_id']);
-    const catKey = pickKey(sample, ['category', 'sector', 'asset_type']);
-    const dateKey = pickKey(sample, ['date', 'year', 'period']);
-    const valueKey = pickKey(sample, ['close', 'price', 'value', 'pct_change']);
-    if (!tickerKey || !dateKey || !valueKey) return { categories: [], byTicker: {} };
-
-    const cats = new Set();
-    const grouped = new Map();
-    for (const r of data) {
-      const t = r[tickerKey];
-      if (!t) continue;
-      if (catKey && r[catKey]) cats.add(r[catKey]);
-      if (!grouped.has(t)) grouped.set(t, { ticker: t, category: catKey ? r[catKey] : '', points: [] });
-      const v = r[valueKey];
-      if (typeof v === 'number') grouped.get(t).points.push({ x: r[dateKey], y: v });
-    }
-    for (const g of grouped.values()) {
-      g.points.sort((a, b) => (a.x > b.x ? 1 : -1));
-    }
-    return { categories: ['All', ...Array.from(cats)], byTicker: Object.fromEntries(grouped) };
+  const categories = useMemo(() => {
+    if (!Array.isArray(data) || data.length === 0) return ['All'];
+    const s = new Set();
+    for (const r of data) if (r.category) s.add(r.category);
+    return ['All', ...Array.from(s).sort()];
   }, [data]);
 
-  // Pivot to {x, [ticker]: y} restricted to selected category.
-  const series = useMemo(() => {
-    const tickers = Object.values(byTicker).filter(
-      (t) => category === 'All' || t.category === category
+  const rows = useMemo(() => {
+    if (!Array.isArray(data) || data.length === 0) return [];
+    const filtered = data
+      .filter((r) => category === 'All' || r.category === category)
+      .filter((r) => typeof r.yoy_return_pct === 'number');
+    filtered.sort((a, b) =>
+      sortDir === 'top'
+        ? b.yoy_return_pct - a.yoy_return_pct
+        : a.yoy_return_pct - b.yoy_return_pct,
     );
-    const xs = new Set();
-    for (const t of tickers) for (const p of t.points) xs.add(p.x);
-    const sortedXs = Array.from(xs).sort((a, b) => (a > b ? 1 : -1));
-    return {
-      tickers,
-      rows: sortedXs.map((x) => {
-        const row = { x };
-        for (const t of tickers) {
-          const point = t.points.find((p) => p.x === x);
-          if (point) row[t.ticker] = point.y;
-        }
-        return row;
-      }),
-    };
-  }, [byTicker, category]);
+    return filtered.slice(0, 15).map((r) => ({
+      ticker: r.ticker,
+      company: r.company_name,
+      yoy: r.yoy_return_pct,
+      category: r.category,
+      country: r.country_name,
+      role: r.energy_role,
+      vol: r.volatility,
+      sharpe: r.sharpe_ratio,
+      price: r.current_price_usd,
+    }));
+  }, [data, category, sortDir]);
 
-  const isEmpty = !loading && !error && series.rows.length === 0;
+  const isEmpty = !loading && !error && rows.length === 0;
 
   return (
     <section className="section energy-stocks">
       <div className="container">
-        <SectionTag num="03.5" label="Equities · Sector performance" path="/ api / energy / stocks" />
+        <SectionTag num="03.5" label="Equities · YoY returns" path="/ api / energy / stocks" />
         <div className="panel-head">
           <h2>
-            Where <em>capital</em> moved — sector by sector.
+            Where <em>capital</em> moved — top 15 by YoY return.
           </h2>
           <DataBadge source={source} lastUpdated={lastUpdated} error={error} loading={loading} />
         </div>
 
-        {categories.length > 1 && (
-          <div className="filter-row">
-            <span className="label">Sector</span>
-            {categories.map((c) => (
-              <button
-                key={c}
-                className={`chip ${category === c ? 'on' : ''}`}
-                onClick={() => setCategory(c)}
-              >
-                {c}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="filter-row">
+          <span className="label">Sector</span>
+          {categories.map((c) => (
+            <button
+              key={c}
+              className={`chip ${category === c ? 'on' : ''}`}
+              onClick={() => setCategory(c)}
+            >
+              {c}
+            </button>
+          ))}
+          <span className="spacer-flex" />
+          <span className="label">Show</span>
+          <button
+            className={`chip ${sortDir === 'top' ? 'on' : ''}`}
+            onClick={() => setSortDir('top')}
+          >
+            Top
+          </button>
+          <button
+            className={`chip ${sortDir === 'bottom' ? 'on' : ''}`}
+            onClick={() => setSortDir('bottom')}
+          >
+            Bottom
+          </button>
+        </div>
 
         <div className="chart-frame">
           <StatePane loading={loading} error={error} empty={isEmpty}>
-            <ResponsiveContainer width="100%" height={360}>
-              <AreaChart data={series.rows} margin={{ top: 16, right: 24, left: 8, bottom: 8 }}>
-                <defs>
-                  {series.tickers.map((t, i) => (
-                    <linearGradient key={t.ticker} id={`grad-${i}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop
-                        offset="0%"
-                        stopColor={SERIES_COLORS[i % SERIES_COLORS.length]}
-                        stopOpacity={0.35}
-                      />
-                      <stop
-                        offset="100%"
-                        stopColor={SERIES_COLORS[i % SERIES_COLORS.length]}
-                        stopOpacity={0}
-                      />
-                    </linearGradient>
-                  ))}
-                </defs>
+            <ResponsiveContainer width="100%" height={Math.max(300, rows.length * 26 + 60)}>
+              <BarChart
+                data={rows}
+                layout="vertical"
+                margin={{ top: 16, right: 24, left: 8, bottom: 8 }}
+              >
                 {chartGrid}
-                <XAxis dataKey="x" stroke={C.ink4} tick={axisTickStyle} />
-                <YAxis stroke={C.ink4} tick={axisTickStyle} />
-                <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} />
-                <Legend wrapperStyle={{ fontFamily: axisTickStyle.fontFamily, fontSize: 11 }} />
-                {series.tickers.map((t, i) => (
-                  <Area
-                    key={t.ticker}
-                    type="monotone"
-                    dataKey={t.ticker}
-                    stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
-                    strokeWidth={1.5}
-                    fill={`url(#grad-${i})`}
-                    isAnimationActive
-                  />
-                ))}
-              </AreaChart>
+                <XAxis type="number" stroke={C.ink4} tick={axisTickStyle} />
+                <YAxis
+                  type="category"
+                  dataKey="ticker"
+                  width={90}
+                  stroke={C.ink4}
+                  tick={axisTickStyle}
+                />
+                <ReferenceLine x={0} stroke={C.ink4} />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  labelStyle={tooltipLabelStyle}
+                  formatter={(value) => [fmtPct(value), 'YoY return']}
+                  labelFormatter={(label, payload) => {
+                    const p = payload?.[0]?.payload;
+                    return p ? `${label} · ${p.company || ''}` : label;
+                  }}
+                />
+                <Bar dataKey="yoy" name="YoY %">
+                  {rows.map((r, i) => (
+                    <Cell key={i} fill={r.yoy >= 0 ? C.good : C.bad} />
+                  ))}
+                </Bar>
+              </BarChart>
             </ResponsiveContainer>
           </StatePane>
         </div>
+
+        {rows.length > 0 && (
+          <div className="stocks-meta">
+            <span>
+              avg volatility{' '}
+              {fmtPct(
+                rows.reduce((s, r) => s + (r.vol ?? 0), 0) / rows.filter((r) => r.vol != null).length,
+              )}
+            </span>
+            <span>
+              avg sharpe{' '}
+              {fmtNumber(
+                rows.reduce((s, r) => s + (r.sharpe ?? 0), 0) /
+                  rows.filter((r) => r.sharpe != null).length,
+              )}
+            </span>
+          </div>
+        )}
       </div>
     </section>
   );
 }
 
 // ===========================================================================
-//  SECTION 06 — Country deep-dive
+//  03.6 — Country deep-dive   (/api/energy/country/{country_id})
 // ===========================================================================
 function CountrySection() {
-  // Pull overview to populate the country selector.
   const { data: overview } = useApi('/api/energy/overview');
 
   const countries = useMemo(() => {
     if (!Array.isArray(overview) || overview.length === 0) return [];
-    const sample = overview[0];
-    const idKey = pickKey(sample, ['country_id', 'iso3', 'country_code']);
-    const nameKey = pickKey(sample, ['country_name', 'country', 'name']);
-    if (!idKey) return [];
     const seen = new Map();
     for (const r of overview) {
-      const id = r[idKey];
-      if (id && !seen.has(id)) seen.set(id, nameKey ? r[nameKey] : id);
+      const id = r.country_id;
+      if (id && !seen.has(id)) seen.set(id, r.country_name || id);
     }
     return Array.from(seen.entries())
       .map(([id, name]) => ({ id, name }))
@@ -623,12 +617,21 @@ function CountrySection() {
     };
   }, [data]);
 
-  const isEmpty = picked && !loading && !error && buckets && Object.values(buckets).every((b) => b.length === 0);
+  const isEmpty =
+    picked &&
+    !loading &&
+    !error &&
+    buckets &&
+    Object.values(buckets).every((b) => b.length === 0);
 
   return (
     <section className="section energy-country">
       <div className="container">
-        <SectionTag num="03.6" label="Country · Deep dive" path="/ api / energy / country / { id }" />
+        <SectionTag
+          num="03.6"
+          label="Country · Deep dive"
+          path="/ api / energy / country / { id }"
+        />
         <div className="panel-head">
           <h2>
             Pick a country, <em>see the system</em> — overview, trade, crises, equities.
@@ -639,7 +642,7 @@ function CountrySection() {
         {countries.length > 0 ? (
           <div className="filter-row scroll">
             <span className="label">Country</span>
-            {countries.slice(0, 30).map((c) => (
+            {countries.map((c) => (
               <button
                 key={c.id}
                 className={`chip ${picked === c.id ? 'on' : ''}`}
@@ -682,7 +685,7 @@ function CountrySection() {
                     error={error}
                     empty={!loading && !error && (!rows || rows.length === 0)}
                   >
-                    <MiniTable rows={rows} max={6} />
+                    <CountryBucket bucket={bucket} rows={rows} />
                   </StatePane>
                 </div>
               );
@@ -701,33 +704,76 @@ function CountrySection() {
   );
 }
 
-// Compact tabular preview used in the country grid.
-function MiniTable({ rows, max = 6 }) {
+// Render each country bucket with the columns that matter for it.
+function CountryBucket({ bucket, rows }) {
   if (!rows || rows.length === 0) return null;
-  const cols = Object.keys(rows[0]).slice(0, 5);
+
+  const COLS = {
+    overview: [
+      ['year', 'Year'],
+      ['energy_product', 'Product'],
+      ['production_volume', 'Production'],
+      ['consumption_volume', 'Consumption'],
+      ['self_sufficiency_ratio', 'Self-suff.'],
+      ['energy_role', 'Role'],
+    ],
+    imports: [
+      ['year', 'Year'],
+      ['energy_product', 'Product'],
+      ['import_volume', 'Imports'],
+      ['export_volume', 'Exports'],
+      ['net_trade_balance', 'Net'],
+      ['import_dependency_pct', 'Dep %'],
+    ],
+    crisis: [
+      ['crisis_name', 'Crisis'],
+      ['ticker', 'Ticker'],
+      ['asset_type', 'Asset'],
+      ['crisis_return_pct', 'Return %'],
+      ['max_drawdown_pct', 'Max DD %'],
+      ['has_recovered', 'Rec?'],
+    ],
+    stocks: [
+      ['ticker', 'Ticker'],
+      ['company_name', 'Company'],
+      ['category', 'Sector'],
+      ['yoy_return_pct', 'YoY %'],
+      ['volatility', 'Vol'],
+      ['sharpe_ratio', 'Sharpe'],
+    ],
+  };
+
+  const cols = COLS[bucket] || Object.keys(rows[0]).slice(0, 5).map((k) => [k, k]);
+
   return (
     <div className="mini-table">
       <table>
         <thead>
           <tr>
-            {cols.map((c) => (
-              <th key={c}>{c}</th>
+            {cols.map(([k, label]) => (
+              <th key={k}>{label}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {rows.slice(0, max).map((r, i) => (
+          {rows.slice(0, 8).map((r, i) => (
             <tr key={i}>
-              {cols.map((c) => (
-                <td key={c}>
-                  {typeof r[c] === 'number' ? fmtNumber(r[c]) : String(r[c] ?? '—')}
+              {cols.map(([k]) => (
+                <td key={k}>
+                  {typeof r[k] === 'number'
+                    ? fmtNumber(r[k])
+                    : r[k] === true
+                    ? '✓'
+                    : r[k] === false
+                    ? '—'
+                    : String(r[k] ?? '—')}
                 </td>
               ))}
             </tr>
           ))}
         </tbody>
       </table>
-      {rows.length > max && <div className="more">+ {rows.length - max} more rows</div>}
+      {rows.length > 8 && <div className="more">+ {rows.length - 8} more rows</div>}
     </div>
   );
 }

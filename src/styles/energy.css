@@ -334,6 +334,34 @@
   height: 100%;
   transition: width 0.4s ease;
 }
+.crisis-card .crisis-foot {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  border-top: 1px dashed var(--rule);
+  padding-top: 8px;
+  margin-top: 2px;
+}
+.crisis-card .crisis-foot .good { color: var(--good); }
+.crisis-card .crisis-foot .warn { color: var(--warn); }
+
+/* ————— Stocks meta (avg vol / sharpe) ————— */
+.stocks-meta {
+  display: flex;
+  justify-content: flex-end;
+  gap: 22px;
+  margin-top: 8px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  letter-spacing: 0.06em;
+}
+
+/* Used by chip rows that need a flex-grow spacer in the middle. */
+.spacer-flex { flex: 1; }
 
 /* ————— Country deep-dive grid ————— */
 .country-grid {
