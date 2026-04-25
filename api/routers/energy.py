@@ -106,25 +106,34 @@ def stocks(
     return serve_query(response, key, sql, params, manager=fabric_energy)
 
 
-@router.get("/country/{country_id}")
-def country_deep_dive(country_id: str, response: Response) -> Any:
-    """Aggregate the Energy slice for a single country in one round-trip-safe call."""
-    key = cache.make_key("energy.country", {"country_id": country_id})
+@router.get("/country/{country_name}")
+def country_deep_dive(country_name: str, response: Response) -> Any:
+    """Aggregate the Energy slice for a single country in one round-trip-safe call.
+
+    Joins on ``country_name`` instead of ``country_id`` because the gold
+    tables don't share a consistent country_id key — the overview view
+    uses one numbering, but crisis/stocks use a different one. Names are
+    stable across views.
+    """
+    key = cache.make_key("energy.country", {"country_name": country_name})
 
     def loader() -> dict[str, Any]:
         return {
             "overview": fabric_energy.query(
-                "SELECT * FROM gold_energy_overview WHERE country_id = ?", [country_id]
+                "SELECT * FROM gold_energy_overview WHERE country_name = ?",
+                [country_name],
             ),
             "imports": fabric_energy.query(
-                "SELECT * FROM gold_import_export_analysis WHERE country_id = ?",
-                [country_id],
+                "SELECT * FROM gold_import_export_analysis WHERE country_name = ?",
+                [country_name],
             ),
             "crisis": fabric_energy.query(
-                "SELECT * FROM gold_crisis_analysis WHERE country_id = ?", [country_id]
+                "SELECT * FROM gold_crisis_analysis WHERE country_name = ?",
+                [country_name],
             ),
             "stocks": fabric_energy.query(
-                "SELECT * FROM gold_stock_performance WHERE country_id = ?", [country_id]
+                "SELECT * FROM gold_stock_performance WHERE country_name = ?",
+                [country_name],
             ),
         }
 

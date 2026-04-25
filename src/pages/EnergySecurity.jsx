@@ -658,14 +658,19 @@ function CountrySection() {
 
   const countries = useMemo(() => {
     if (!Array.isArray(overview) || overview.length === 0) return [];
-    const seen = new Map();
+    // Join on country_name instead of country_id — the gold tables don't
+    // share a consistent id, so id-based fan-out queries returned the
+    // wrong country's crisis/stocks rows. Names are stable across views.
+    const seen = new Set();
+    const out = [];
     for (const r of overview) {
-      const id = r.country_id;
-      if (id && !seen.has(id)) seen.set(id, r.country_name || id);
+      const name = r.country_name;
+      if (name && !seen.has(name)) {
+        seen.add(name);
+        out.push({ id: name, name });
+      }
     }
-    return Array.from(seen.entries())
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    return out.sort((a, b) => String(a.name).localeCompare(String(b.name)));
   }, [overview]);
 
   const [picked, setPicked] = useState(null);
