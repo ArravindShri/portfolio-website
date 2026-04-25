@@ -1,11 +1,13 @@
-"""Fabric Warehouse connection manager.
+"""Fabric Warehouse connection managers.
 
-Tries pyodbc first (preferred — full TDS, full SQL surface). Falls back to
-an azure-identity + REST client when pyodbc is unavailable or its connection
-fails — useful for serverless environments where the ODBC driver is absent.
+Two warehouses are wired in:
 
-Both implementations expose the same `query(sql, params=None) -> list[dict]`
-contract so callers don't care which one they got.
+- `fabric_portfolio` — Project 1 (Investment Portfolio), env *_P1
+- `fabric_energy`    — Project 3 (Energy Security),     env *_P3
+
+They share Service Principal credentials but live in different workspaces.
+Each manager picks pyodbc as primary and azure-identity + REST as the
+auto-fallback when ODBC is unavailable (e.g. on Vercel).
 """
 from __future__ import annotations
 
@@ -20,13 +22,11 @@ from config import settings
 log = logging.getLogger("fabric.db")
 
 # ----------------------------------------------------------------------------
-# Backend implementations
+# Backend implementations — instances are bound to a single (endpoint, db).
 # ----------------------------------------------------------------------------
 
 
 class FabricBackend:
-    """Common interface."""
-
     name: str = "base"
 
     def query(self, sql: str, params: Sequence[Any] | None = None) -> list[dict[str, Any]]:
@@ -41,24 +41,24 @@ class FabricBackend:
 
 
 class PyodbcBackend(FabricBackend):
-    """Primary backend — uses the ODBC Driver 18 for SQL Server."""
+    """ODBC Driver 18 + Service Principal auth, scoped to one warehouse."""
 
     name = "pyodbc"
 
-    def __init__(self) -> None:
-        import pyodbc  # noqa: PLC0415  — local import so absence triggers fallback
+    def __init__(self, sql_endpoint: str, database: str) -> None:
+        import pyodbc  # noqa: PLC0415
 
         self._pyodbc = pyodbc
         self._conn_str = (
             "Driver={ODBC Driver 18 for SQL Server};"
-            f"Server={settings.fabric_sql_endpoint};"
-            f"Database={settings.fabric_database};"
+            f"Server={sql_endpoint};"
+            f"Database={database};"
             "Authentication=ActiveDirectoryServicePrincipal;"
             f"UID={settings.fabric_client_id};"
             f"PWD={settings.fabric_client_secret};"
             "Encrypt=yes;TrustServerCertificate=no;"
         )
-        # Eagerly attempt a connection once so caller can fall back early.
+        # Probe once so callers can fail-over early.
         with self._pyodbc.connect(self._conn_str, timeout=10):
             pass
 
@@ -71,36 +71,29 @@ class PyodbcBackend(FabricBackend):
 
 
 class RestBackend(FabricBackend):
-    """Fallback backend — azure-identity Service Principal token + Fabric REST.
-
-    Fabric's Warehouse exposes a query REST surface scoped to the SQL
-    analytics endpoint. We acquire an access token for `database.windows.net`
-    and POST the query. If the REST path is unavailable in your tenant,
-    deploy the backend to Railway/Render where pyodbc is supported.
-    """
+    """azure-identity Service Principal token + Fabric warehouse REST query."""
 
     name = "rest"
 
-    def __init__(self) -> None:
+    def __init__(self, sql_endpoint: str, database: str) -> None:
         from azure.identity import ClientSecretCredential  # noqa: PLC0415
 
+        self._sql_endpoint = sql_endpoint
+        self._database = database
         self._credential = ClientSecretCredential(
             tenant_id=settings.fabric_tenant_id,
             client_id=settings.fabric_client_id,
             client_secret=settings.fabric_client_secret,
         )
         self._scope = "https://database.windows.net/.default"
-        # Sanity-check the credential up front.
+        # Validate credential up front.
         self._credential.get_token(self._scope)
 
     def _token(self) -> str:
         return self._credential.get_token(self._scope).token
 
     def _query_url(self) -> str:
-        # Fabric warehouse REST query endpoint.
-        host = settings.fabric_sql_endpoint
-        db = settings.fabric_database
-        return f"https://{host}/v1.0/warehouses/{db}/query"
+        return f"https://{self._sql_endpoint}/v1.0/warehouses/{self._database}/query"
 
     def query(self, sql: str, params: Sequence[Any] | None = None) -> list[dict[str, Any]]:
         bound_sql = _bind_inline_params(sql, params or [])
@@ -115,9 +108,8 @@ class RestBackend(FabricBackend):
         )
         resp.raise_for_status()
         payload = resp.json()
-        # Fabric REST query surface returns either {"rows":[...]} or
-        # {"results":[{"rows":[...], "columns":[...]}]} depending on version;
-        # normalize to list[dict].
+        # Normalize to list[dict] — Fabric REST returns either {"rows":[...]} or
+        # {"results":[{"rows":[...], "columns":[...]}]} depending on version.
         if isinstance(payload, list):
             return payload
         if "rows" in payload and isinstance(payload["rows"], list):
@@ -136,12 +128,7 @@ class RestBackend(FabricBackend):
 
 
 def _bind_inline_params(sql: str, params: Iterable[Any]) -> str:
-    """Replace `?` placeholders with safely-quoted literals for REST submission.
-
-    Only used by RestBackend. The SQL we issue is internal and never derived
-    from request bodies; query-string filter values are bound through this
-    function to keep them out of the SQL string.
-    """
+    """Replace `?` placeholders with safely-quoted literals for REST submission."""
     out_parts: list[str] = []
     iterator = iter(params)
     for chunk in sql.split("?"):
@@ -166,21 +153,36 @@ def _quote_literal(value: Any) -> str:
 
 
 # ----------------------------------------------------------------------------
-# Manager — chooses the active backend, caches it, allows re-probe.
+# Manager — one per warehouse. Lazily picks pyodbc → REST.
 # ----------------------------------------------------------------------------
 
 
 class FabricManager:
-    def __init__(self) -> None:
+    """Owns the active backend for a single (sql_endpoint, database) pair."""
+
+    def __init__(self, name: str, sql_endpoint: str, database: str) -> None:
+        self.name = name
+        self._sql_endpoint = sql_endpoint
+        self._database = database
         self._lock = threading.Lock()
         self._backend: FabricBackend | None = None
         self._reason: str = "not initialized"
 
+    @property
+    def configured(self) -> bool:
+        return bool(
+            self._sql_endpoint
+            and self._database
+            and settings.fabric_client_id
+            and settings.fabric_client_secret
+            and settings.fabric_tenant_id
+        )
+
     def _build(self) -> FabricBackend:
-        if not settings.fabric_configured:
+        if not self.configured:
             raise ConnectionError(
-                "Fabric credentials not set — see .env.example. Falling back "
-                "to cache-only mode for live endpoints."
+                f"Fabric credentials/endpoint not set for {self.name} — "
+                "see .env.example."
             )
 
         mode = settings.connection_mode
@@ -188,8 +190,8 @@ class FabricManager:
 
         if mode in ("auto", "pyodbc"):
             try:
-                backend = PyodbcBackend()
-                log.info("Fabric backend = pyodbc")
+                backend = PyodbcBackend(self._sql_endpoint, self._database)
+                log.info("Fabric[%s] backend = pyodbc", self.name)
                 return backend
             except ImportError as e:
                 errors.append(f"pyodbc unavailable: {e}")
@@ -200,8 +202,8 @@ class FabricManager:
 
         if mode in ("auto", "rest"):
             try:
-                backend = RestBackend()
-                log.info("Fabric backend = rest")
+                backend = RestBackend(self._sql_endpoint, self._database)
+                log.info("Fabric[%s] backend = rest", self.name)
                 return backend
             except Exception as e:  # noqa: BLE001
                 errors.append(f"rest fallback failed: {e}")
@@ -227,9 +229,17 @@ class FabricManager:
         with self._lock:
             backend = self._backend
         if backend is None:
-            return {"connected": False, "method": None, "reason": self._reason}
+            return {
+                "name": self.name,
+                "configured": self.configured,
+                "connected": False,
+                "method": None,
+                "reason": self._reason,
+            }
         ok = backend.healthcheck()
         return {
+            "name": self.name,
+            "configured": self.configured,
             "connected": ok,
             "method": backend.name,
             "reason": "ok" if ok else "healthcheck failed",
@@ -241,4 +251,14 @@ class FabricManager:
             self._reason = "reset"
 
 
-fabric = FabricManager()
+# Module-level singletons — routers import these directly.
+fabric_portfolio = FabricManager(
+    "portfolio",
+    settings.fabric_sql_endpoint_p1,
+    settings.fabric_database_p1,
+)
+fabric_energy = FabricManager(
+    "energy",
+    settings.fabric_sql_endpoint_p3,
+    settings.fabric_database_p3,
+)

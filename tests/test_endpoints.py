@@ -25,13 +25,16 @@ def test_health_returns_status_block() -> None:
     assert r.status_code == 200
     body = r.json()
     assert body["status"] == "healthy"
-    assert "fabric_connected" in body
-    assert "fabric_method" in body
-    assert body["projects"] == {
-        "energy": "live",
-        "portfolio": "live",
-        "defense": "static",
-    }
+    # Two warehouses, each with their own status block.
+    assert "warehouses" in body
+    assert set(body["warehouses"]) == {"portfolio", "energy"}
+    for name in ("portfolio", "energy"):
+        wh = body["warehouses"][name]
+        assert wh["name"] == name
+        assert "configured" in wh
+        assert "connected" in wh
+        assert "method" in wh
+    assert body["projects"]["defense"] == "static"
 
 
 def test_root_returns_descriptor() -> None:
@@ -71,10 +74,26 @@ def test_cors_preflight_allows_localhost() -> None:
         assert r.headers.get("access-control-allow-origin") == "http://localhost:5173"
 
 
-def test_energy_endpoint_returns_503_without_credentials(monkeypatch) -> None:
-    # Without Fabric credentials, energy endpoints should fail gracefully.
-    monkeypatch.setenv("FABRIC_SQL_ENDPOINT", "")
+def test_energy_endpoint_returns_503_without_credentials() -> None:
+    # Without P3 Fabric credentials, energy endpoints should fail gracefully.
     r = client.get("/api/energy/overview")
     assert r.status_code in (503, 500)
     body = r.json()
     assert body.get("error") is True
+
+
+def test_portfolio_endpoint_returns_503_without_credentials() -> None:
+    # Without P1 Fabric credentials, portfolio endpoints should fail gracefully.
+    r = client.get("/api/portfolio/stocks")
+    assert r.status_code in (503, 500)
+    body = r.json()
+    assert body.get("error") is True
+
+
+def test_health_reports_unconfigured_when_credentials_missing() -> None:
+    # With no Fabric env vars set in test context, both warehouses should
+    # report unconfigured (not "live") in the projects map.
+    r = client.get("/api/health")
+    body = r.json()
+    assert body["projects"]["portfolio"] == "unconfigured"
+    assert body["projects"]["energy"] == "unconfigured"

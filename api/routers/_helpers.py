@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import HTTPException, Response
 
 import cache
-from database import fabric
+from database import FabricManager
 
 
 def build_query(base: str, filters: dict[str, Any]) -> tuple[str, list[Any]]:
@@ -32,10 +32,17 @@ def serve_query(
     cache_key: str,
     sql: str,
     params: list[Any] | None = None,
+    *,
+    manager: FabricManager,
 ) -> Any:
-    """Run a Fabric query through the cache, attach data-source headers."""
+    """Run a Fabric query through the cache, attach data-source headers.
+
+    `manager` selects which warehouse to hit — `fabric_portfolio` or
+    `fabric_energy`. Cache keys are namespaced per router so they don't
+    collide across warehouses.
+    """
     def loader() -> Any:
-        return fabric.query(sql, params or [])
+        return manager.query(sql, params or [])
 
     try:
         data, meta = cache.get_or_load(cache_key, loader)
@@ -44,11 +51,12 @@ def serve_query(
             status_code=503,
             detail={
                 "error": True,
-                "message": f"Database connection unavailable: {exc}",
+                "message": f"Database connection unavailable ({manager.name}): {exc}",
                 "cached": False,
             },
         ) from exc
 
     response.headers["X-Data-Source"] = meta["source"]
     response.headers["X-Last-Updated"] = meta["cached_at"]
+    response.headers["X-Warehouse"] = manager.name
     return data

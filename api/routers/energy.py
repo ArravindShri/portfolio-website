@@ -1,12 +1,12 @@
-"""Project 3 — Energy Security endpoints (live Fabric)."""
+"""Project 3 — Energy Security endpoints (live Fabric, P3 warehouse)."""
 from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Query, Response
+from fastapi import APIRouter, HTTPException, Query, Response
 
 import cache
-from database import fabric
+from database import fabric_energy
 from routers._helpers import build_query, serve_query
 
 router = APIRouter(prefix="/api/energy", tags=["energy"])
@@ -23,8 +23,10 @@ def overview(
         "SELECT * FROM gold_energy_overview",
         {"energy_product": product, "year": year, "country_id": country},
     )
-    key = cache.make_key("energy.overview", {"product": product, "year": year, "country": country})
-    return serve_query(response, key, sql, params)
+    key = cache.make_key(
+        "energy.overview", {"product": product, "year": year, "country": country}
+    )
+    return serve_query(response, key, sql, params, manager=fabric_energy)
 
 
 @router.get("/prices")
@@ -52,7 +54,7 @@ def prices(
         "energy.prices",
         {"product": product, "start_year": start_year, "end_year": end_year},
     )
-    return serve_query(response, key, sql, params)
+    return serve_query(response, key, sql, params, manager=fabric_energy)
 
 
 @router.get("/imports")
@@ -69,7 +71,7 @@ def imports(
     key = cache.make_key(
         "energy.imports", {"country": country, "product": product, "year": year}
     )
-    return serve_query(response, key, sql, params)
+    return serve_query(response, key, sql, params, manager=fabric_energy)
 
 
 @router.get("/crisis")
@@ -85,7 +87,7 @@ def crisis(
     key = cache.make_key(
         "energy.crisis", {"crisis_id": crisis_id, "asset_type": asset_type}
     )
-    return serve_query(response, key, sql, params)
+    return serve_query(response, key, sql, params, manager=fabric_energy)
 
 
 @router.get("/stocks")
@@ -101,7 +103,7 @@ def stocks(
     key = cache.make_key(
         "energy.stocks", {"asset_type": asset_type, "category": category}
     )
-    return serve_query(response, key, sql, params)
+    return serve_query(response, key, sql, params, manager=fabric_energy)
 
 
 @router.get("/country/{country_id}")
@@ -111,17 +113,17 @@ def country_deep_dive(country_id: str, response: Response) -> Any:
 
     def loader() -> dict[str, Any]:
         return {
-            "overview": fabric.query(
+            "overview": fabric_energy.query(
                 "SELECT * FROM gold_energy_overview WHERE country_id = ?", [country_id]
             ),
-            "imports": fabric.query(
+            "imports": fabric_energy.query(
                 "SELECT * FROM gold_import_export_analysis WHERE country_id = ?",
                 [country_id],
             ),
-            "crisis": fabric.query(
+            "crisis": fabric_energy.query(
                 "SELECT * FROM gold_crisis_analysis WHERE country_id = ?", [country_id]
             ),
-            "stocks": fabric.query(
+            "stocks": fabric_energy.query(
                 "SELECT * FROM gold_stock_performance WHERE country_id = ?", [country_id]
             ),
         }
@@ -129,17 +131,16 @@ def country_deep_dive(country_id: str, response: Response) -> Any:
     try:
         data, meta = cache.get_or_load(key, loader)
     except Exception as exc:  # noqa: BLE001
-        from fastapi import HTTPException
-
         raise HTTPException(
             status_code=503,
             detail={
                 "error": True,
-                "message": f"Database connection unavailable: {exc}",
+                "message": f"Database connection unavailable (energy): {exc}",
                 "cached": False,
             },
         ) from exc
 
     response.headers["X-Data-Source"] = meta["source"]
     response.headers["X-Last-Updated"] = meta["cached_at"]
+    response.headers["X-Warehouse"] = fabric_energy.name
     return data
