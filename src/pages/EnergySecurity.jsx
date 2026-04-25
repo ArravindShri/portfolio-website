@@ -693,12 +693,22 @@ function CountrySection() {
   // results until the tag matches the current pick.
   const [fetchedFor, setFetchedFor] = useState(null);
 
+  // Ground-truth check: does fetched.data actually contain rows for the
+  // currently-picked country? `loading: false` alone isn't enough —
+  // between the click that changes `picked` and useApi's next commit,
+  // fetched.data still references the PREVIOUS country. Without this
+  // guard the cache would store Australia's payload under the key
+  // "Germany".
+  const dataMatchesPicked = !!fetched.data?.overview?.some(
+    (r) => r.country_name === picked,
+  );
+
   useEffect(() => {
     if (!picked) return;
     if (fetched.loading) return; // wait for the in-flight request to settle
-    // Settled (success or error) — tag this result as belonging to `picked`.
+    if (!dataMatchesPicked) return; // stale fetched.data — let the next fetch land
     setFetchedFor(picked);
-    if (!fetched.error && fetched.data && !cache[picked]) {
+    if (!cache[picked]) {
       setCache((prev) => ({
         ...prev,
         [picked]: {
@@ -712,18 +722,19 @@ function CountrySection() {
     picked,
     cache,
     fetched.loading,
-    fetched.error,
     fetched.data,
     fetched.source,
     fetched.lastUpdated,
+    dataMatchesPicked,
   ]);
 
   // ---- Display selection ------------------------------------------------
   const cachedEntry = picked ? cache[picked] : null;
-  // Fetched results are only safe to show when they correspond to the
-  // currently-picked country. Otherwise we MUST render a loading state —
-  // never the previous country's data.
-  const fetchIsForCurrentPick = fetchedFor === picked;
+  // Fetched results are only safe to show when (a) we already tagged this
+  // fetch as belonging to `picked` AND (b) the data actually contains a
+  // row for `picked`. The dataMatchesPicked check closes the loop — stale
+  // data can never leak through.
+  const fetchIsForCurrentPick = fetchedFor === picked && dataMatchesPicked;
   const view = cachedEntry
     ? {
         data: cachedEntry.data,
