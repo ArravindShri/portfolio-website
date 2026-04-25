@@ -22,13 +22,19 @@ def _split_csv(value: str | None) -> list[str]:
 
 @dataclass(frozen=True)
 class Settings:
-    # Project 1 — Investment Portfolio warehouse
+    # Project 1 — Investment Portfolio warehouse (pyodbc inputs)
     fabric_sql_endpoint_p1: str = os.getenv("FABRIC_SQL_ENDPOINT_P1", "")
     fabric_database_p1: str = os.getenv("FABRIC_DATABASE_P1", "")
+    # Fabric REST API fallback inputs (workspace + warehouse GUIDs)
+    fabric_workspace_id_p1: str = os.getenv("FABRIC_WORKSPACE_ID_P1", "")
+    fabric_warehouse_id_p1: str = os.getenv("FABRIC_WAREHOUSE_ID_P1", "")
 
-    # Project 3 — Energy Security warehouse
+    # Project 3 — Energy Security warehouse (pyodbc inputs)
     fabric_sql_endpoint_p3: str = os.getenv("FABRIC_SQL_ENDPOINT_P3", "")
     fabric_database_p3: str = os.getenv("FABRIC_DATABASE_P3", "")
+    # Fabric REST API fallback inputs (workspace + warehouse GUIDs)
+    fabric_workspace_id_p3: str = os.getenv("FABRIC_WORKSPACE_ID_P3", "")
+    fabric_warehouse_id_p3: str = os.getenv("FABRIC_WAREHOUSE_ID_P3", "")
 
     # Shared Service Principal credentials
     fabric_client_id: str = os.getenv("FABRIC_CLIENT_ID", "")

@@ -5,13 +5,30 @@ Two warehouses are wired in:
 - `fabric_portfolio` — Project 1 (Investment Portfolio), env *_P1
 - `fabric_energy`    — Project 3 (Energy Security),     env *_P3
 
-They share Service Principal credentials but live in different workspaces.
-Each manager picks pyodbc as primary and azure-identity + REST as the
-auto-fallback when ODBC is unavailable (e.g. on Vercel).
+Both share Service Principal credentials but live in different workspaces.
+
+Backend strategy (pyodbc primary, Fabric REST fallback):
+
+1. **PyodbcTokenBackend** (preferred). We acquire an Entra ID access token
+   via ``ClientSecretCredential`` for scope
+   ``https://database.windows.net/.default`` and inject it into pyodbc using
+   the ``SQL_COPT_SS_ACCESS_TOKEN`` connection attribute. The connection
+   string deliberately does NOT include an ``Authentication=`` clause — the
+   token is the auth.
+
+2. **FabricRestApiBackend** (fallback) — only used when pyodbc/the ODBC
+   driver is unavailable (e.g. on Vercel's stock Python runtime). Uses the
+   Fabric REST API at
+   ``https://api.fabric.microsoft.com/v1/workspaces/{wid}/warehouses/{whid}``
+   which addresses warehouses by GUID, not name, so it requires extra env
+   vars. The current public Fabric REST surface exposes warehouse
+   *metadata* but not a SQL execution endpoint, so this backend can verify
+   connectivity (healthcheck) and surface a clear error from ``query()``.
 """
 from __future__ import annotations
 
 import logging
+import struct
 import threading
 from typing import Any, Iterable, Sequence
 
@@ -22,12 +39,17 @@ from config import settings
 log = logging.getLogger("fabric.db")
 
 
-class FabricRestError(RuntimeError):
-    """Raised by RestBackend with structured detail for /api/health.
+# Microsoft-specific pyodbc connection attribute for AAD access tokens.
+# https://learn.microsoft.com/sql/connect/odbc/using-azure-active-directory
+_SQL_COPT_SS_ACCESS_TOKEN = 1256
 
-    `str(err)` includes status code, URL, and a body snippet so operators
-    can diagnose Fabric REST issues straight from the health endpoint
-    without digging through Vercel logs.
+
+class FabricRestError(RuntimeError):
+    """Structured error surfaced by REST/HTTP backends.
+
+    ``str(err)`` includes status code, URL, and a body snippet so operators
+    can diagnose Fabric issues straight from ``/api/health`` without digging
+    through Vercel logs.
     """
 
     def __init__(
@@ -52,7 +74,7 @@ class FabricRestError(RuntimeError):
 
 
 # ----------------------------------------------------------------------------
-# Backend implementations — instances are bound to a single (endpoint, db).
+# Backend implementations — instances are bound to a single warehouse.
 # ----------------------------------------------------------------------------
 
 
@@ -67,17 +89,49 @@ class FabricBackend:
         carries the full exception detail on failure so the /api/health
         endpoint can surface it to the operator."""
         try:
-            self.query("SELECT 1 AS ok")
+            self._healthcheck_impl()
             return True, None
         except Exception as exc:  # noqa: BLE001
-            log.warning("Fabric healthcheck failed: %s", exc)
+            log.warning("Fabric[%s] healthcheck failed: %s", self.name, exc)
             return False, str(exc)
 
+    def _healthcheck_impl(self) -> None:
+        """Default healthcheck runs ``SELECT 1``. Subclasses can override."""
+        self.query("SELECT 1 AS ok")
 
-class PyodbcBackend(FabricBackend):
-    """ODBC Driver 18 + Service Principal auth, scoped to one warehouse."""
 
-    name = "pyodbc"
+def _aad_token(scope: str) -> str:
+    """Acquire a Service-Principal access token for the requested scope.
+
+    Imported lazily so that import-time failures don't break the module
+    import (e.g. if azure-identity is being installed).
+    """
+    from azure.identity import ClientSecretCredential  # noqa: PLC0415
+
+    cred = ClientSecretCredential(
+        tenant_id=settings.fabric_tenant_id,
+        client_id=settings.fabric_client_id,
+        client_secret=settings.fabric_client_secret,
+    )
+    return cred.get_token(scope).token
+
+
+def _encode_token_attr(token: str) -> bytes:
+    """Pack an AAD token for the SQL_COPT_SS_ACCESS_TOKEN connection attribute.
+
+    ODBC expects a length-prefixed UTF-16-LE byte string here.
+    """
+    raw = token.encode("utf-16-le")
+    return struct.pack(f"=I{len(raw)}s", len(raw), raw)
+
+
+class PyodbcTokenBackend(FabricBackend):
+    """ODBC Driver 18 + AAD access token (SQL_COPT_SS_ACCESS_TOKEN)."""
+
+    name = "pyodbc-token"
+
+    # The token scope for SQL Server / Fabric warehouse TDS endpoints.
+    _SCOPE = "https://database.windows.net/.default"
 
     def __init__(self, sql_endpoint: str, database: str) -> None:
         import pyodbc  # noqa: PLC0415
@@ -85,133 +139,108 @@ class PyodbcBackend(FabricBackend):
         self._pyodbc = pyodbc
         self._conn_str = (
             "Driver={ODBC Driver 18 for SQL Server};"
-            f"Server={sql_endpoint};"
+            f"Server={sql_endpoint},1433;"
             f"Database={database};"
-            "Authentication=ActiveDirectoryServicePrincipal;"
-            f"UID={settings.fabric_client_id};"
-            f"PWD={settings.fabric_client_secret};"
             "Encrypt=yes;TrustServerCertificate=no;"
         )
-        # Probe once so callers can fail-over early.
-        with self._pyodbc.connect(self._conn_str, timeout=10):
+        # Probe once so the manager can fail-over early when ODBC isn't
+        # really usable (driver missing, network blocked, etc.).
+        with self._connect(timeout=10):
             pass
 
+    def _connect(self, timeout: int):
+        token_struct = _encode_token_attr(_aad_token(self._SCOPE))
+        return self._pyodbc.connect(
+            self._conn_str,
+            timeout=timeout,
+            attrs_before={_SQL_COPT_SS_ACCESS_TOKEN: token_struct},
+        )
+
     def query(self, sql: str, params: Sequence[Any] | None = None) -> list[dict[str, Any]]:
-        with self._pyodbc.connect(self._conn_str, timeout=15) as conn:
+        with self._connect(timeout=15) as conn:
             cur = conn.cursor()
             cur.execute(sql, params or [])
             cols = [c[0] for c in cur.description] if cur.description else []
             return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
-class RestBackend(FabricBackend):
-    """azure-identity Service Principal token + Fabric warehouse REST query."""
+class FabricRestApiBackend(FabricBackend):
+    """Fabric REST API fallback (workspace + warehouse GUIDs).
 
-    name = "rest"
+    Uses ``https://api.fabric.microsoft.com/v1/workspaces/{wid}/warehouses/{whid}``.
+    The current public Fabric REST surface exposes warehouse *metadata* but
+    not arbitrary SQL execution, so this backend:
 
-    def __init__(self, sql_endpoint: str, database: str) -> None:
-        from azure.identity import ClientSecretCredential  # noqa: PLC0415
+    - implements ``_healthcheck_impl`` against the warehouse GET endpoint
+      (verifies SP auth + correct GUIDs + reachability),
+    - raises a clear :class:`FabricRestError` from ``query`` until/unless a
+      query endpoint becomes available — at which point only ``query`` needs
+      to change.
+    """
 
-        self._sql_endpoint = sql_endpoint
-        self._database = database
-        self._credential = ClientSecretCredential(
-            tenant_id=settings.fabric_tenant_id,
-            client_id=settings.fabric_client_id,
-            client_secret=settings.fabric_client_secret,
-        )
-        self._scope = "https://database.windows.net/.default"
-        # Validate credential up front.
-        self._credential.get_token(self._scope)
+    name = "fabric-rest"
 
-    def _token(self) -> str:
-        return self._credential.get_token(self._scope).token
+    _SCOPE = "https://api.fabric.microsoft.com/.default"
+    _BASE = "https://api.fabric.microsoft.com/v1"
 
-    def _query_url(self) -> str:
-        return f"https://{self._sql_endpoint}/v1.0/warehouses/{self._database}/query"
-
-    def query(self, sql: str, params: Sequence[Any] | None = None) -> list[dict[str, Any]]:
-        url = self._query_url()
-        bound_sql = _bind_inline_params(sql, params or [])
-
-        # 1) Acquire token. Surface azure-identity's auth message verbatim.
-        try:
-            token = self._token()
-        except Exception as exc:  # noqa: BLE001
-            log.error("REST: token acquisition failed for %s: %s", self._database, exc)
+    def __init__(self, workspace_id: str, warehouse_id: str) -> None:
+        if not workspace_id or not warehouse_id:
             raise FabricRestError(
-                f"token acquisition failed: {exc}",
-                url=url,
+                "Fabric REST fallback needs workspace + warehouse GUIDs "
+                "(FABRIC_WORKSPACE_ID_*, FABRIC_WAREHOUSE_ID_*)"
+            )
+        self._workspace_id = workspace_id
+        self._warehouse_id = warehouse_id
+        # Validate token acquisition up front so the manager can pick a
+        # different backend if the SP isn't allowed Fabric API scope.
+        _aad_token(self._SCOPE)
+
+    def _warehouse_url(self) -> str:
+        return f"{self._BASE}/workspaces/{self._workspace_id}/warehouses/{self._warehouse_id}"
+
+    def _request(self, method: str, url: str, **kwargs: Any) -> requests.Response:
+        try:
+            token = _aad_token(self._SCOPE)
+        except Exception as exc:  # noqa: BLE001
+            raise FabricRestError(
+                f"token acquisition failed (Fabric scope): {exc}", url=url
             ) from exc
 
-        # 2) POST the query.
+        headers = kwargs.pop("headers", {}) or {}
+        headers.setdefault("Authorization", f"Bearer {token}")
         try:
-            resp = requests.post(
-                url,
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "Content-Type": "application/json",
-                },
-                json={"query": bound_sql},
-                timeout=20,
-            )
+            resp = requests.request(method, url, headers=headers, timeout=20, **kwargs)
         except requests.RequestException as exc:
-            log.error("REST: network error POST %s: %s", url, exc)
             raise FabricRestError(f"network error: {exc}", url=url) from exc
 
-        # 3) Surface non-2xx with the body included — Fabric returns useful
-        #    error JSON we want operators to see in /api/health.
         if not resp.ok:
             body_snippet = (resp.text or "")[:600].replace("\n", " ")
-            log.error(
-                "REST: HTTP %s from %s — body=%s", resp.status_code, url, body_snippet
-            )
             raise FabricRestError(
                 f"HTTP {resp.status_code} {resp.reason or ''}".strip(),
                 url=url,
                 status_code=resp.status_code,
                 body=body_snippet,
             )
+        return resp
 
-        # 4) Parse JSON. If the response wasn't JSON, include the text.
-        try:
-            payload = resp.json()
-        except ValueError as exc:
-            body_snippet = (resp.text or "")[:600].replace("\n", " ")
-            log.error("REST: non-JSON response from %s: %s", url, body_snippet)
-            raise FabricRestError(
-                f"non-JSON response: {exc}",
-                url=url,
-                status_code=resp.status_code,
-                body=body_snippet,
-            ) from exc
+    def _healthcheck_impl(self) -> None:
+        # GET warehouse metadata — proves SP auth + correct workspace/warehouse IDs.
+        self._request("GET", self._warehouse_url())
 
-        # 5) Normalize to list[dict].
-        if isinstance(payload, list):
-            return payload
-        if isinstance(payload, dict) and "rows" in payload and isinstance(payload["rows"], list):
-            cols = payload.get("columns")
-            if cols and payload["rows"] and not isinstance(payload["rows"][0], dict):
-                return [dict(zip(cols, row)) for row in payload["rows"]]
-            return payload["rows"]
-        if isinstance(payload, dict) and "results" in payload and payload["results"]:
-            r0 = payload["results"][0]
-            cols = r0.get("columns") or []
-            rows = r0.get("rows") or []
-            if rows and not isinstance(rows[0], dict):
-                return [dict(zip(cols, row)) for row in rows]
-            return rows
-        # Unexpected shape — surface a snippet so it's debuggable.
-        snippet = str(payload)[:300]
+    def query(self, sql: str, params: Sequence[Any] | None = None) -> list[dict[str, Any]]:
+        # The Fabric REST API does not currently expose a public SQL
+        # execution endpoint on warehouses — only metadata operations. Until
+        # one ships, we surface a precise reason instead of returning empty
+        # results that look successful.
         raise FabricRestError(
-            f"unexpected response shape: {snippet}",
-            url=url,
-            status_code=resp.status_code,
-            body=snippet,
+            "Fabric REST API has no SQL execution endpoint; "
+            "use pyodbc (ODBC Driver 18) or pre-materialize results to JSON",
+            url=self._warehouse_url(),
         )
 
 
 def _bind_inline_params(sql: str, params: Iterable[Any]) -> str:
-    """Replace `?` placeholders with safely-quoted literals for REST submission."""
+    """Replace ``?`` placeholders with safely-quoted literals."""
     out_parts: list[str] = []
     iterator = iter(params)
     for chunk in sql.split("?"):
@@ -236,30 +265,44 @@ def _quote_literal(value: Any) -> str:
 
 
 # ----------------------------------------------------------------------------
-# Manager — one per warehouse. Lazily picks pyodbc → REST.
+# Manager — one per warehouse. Lazily picks pyodbc-token → fabric-rest.
 # ----------------------------------------------------------------------------
 
 
 class FabricManager:
-    """Owns the active backend for a single (sql_endpoint, database) pair."""
+    """Owns the active backend for a single warehouse."""
 
-    def __init__(self, name: str, sql_endpoint: str, database: str) -> None:
+    def __init__(
+        self,
+        name: str,
+        sql_endpoint: str,
+        database: str,
+        *,
+        workspace_id: str = "",
+        warehouse_id: str = "",
+    ) -> None:
         self.name = name
         self._sql_endpoint = sql_endpoint
         self._database = database
+        self._workspace_id = workspace_id
+        self._warehouse_id = warehouse_id
         self._lock = threading.Lock()
         self._backend: FabricBackend | None = None
         self._reason: str = "not initialized"
 
     @property
     def configured(self) -> bool:
-        return bool(
-            self._sql_endpoint
-            and self._database
-            and settings.fabric_client_id
+        # We consider the warehouse "configured" if EITHER the pyodbc inputs
+        # (sql_endpoint+database) OR the Fabric REST inputs (workspace_id+
+        # warehouse_id) are present, plus the shared SP credentials.
+        creds = bool(
+            settings.fabric_client_id
             and settings.fabric_client_secret
             and settings.fabric_tenant_id
         )
+        pyodbc_ready = bool(self._sql_endpoint and self._database)
+        rest_ready = bool(self._workspace_id and self._warehouse_id)
+        return creds and (pyodbc_ready or rest_ready)
 
     def _build(self) -> FabricBackend:
         if not self.configured:
@@ -271,10 +314,10 @@ class FabricManager:
         mode = settings.connection_mode
         errors: list[str] = []
 
-        if mode in ("auto", "pyodbc"):
+        if mode in ("auto", "pyodbc") and self._sql_endpoint and self._database:
             try:
-                backend = PyodbcBackend(self._sql_endpoint, self._database)
-                log.info("Fabric[%s] backend = pyodbc", self.name)
+                backend = PyodbcTokenBackend(self._sql_endpoint, self._database)
+                log.info("Fabric[%s] backend = pyodbc-token", self.name)
                 return backend
             except ImportError as e:
                 errors.append(f"pyodbc unavailable: {e}")
@@ -285,11 +328,11 @@ class FabricManager:
 
         if mode in ("auto", "rest"):
             try:
-                backend = RestBackend(self._sql_endpoint, self._database)
-                log.info("Fabric[%s] backend = rest", self.name)
+                backend = FabricRestApiBackend(self._workspace_id, self._warehouse_id)
+                log.info("Fabric[%s] backend = fabric-rest", self.name)
                 return backend
             except Exception as e:  # noqa: BLE001
-                errors.append(f"rest fallback failed: {e}")
+                errors.append(f"fabric-rest fallback failed: {e}")
 
         raise ConnectionError("; ".join(errors) or "no backend available")
 
@@ -339,9 +382,13 @@ fabric_portfolio = FabricManager(
     "portfolio",
     settings.fabric_sql_endpoint_p1,
     settings.fabric_database_p1,
+    workspace_id=settings.fabric_workspace_id_p1,
+    warehouse_id=settings.fabric_warehouse_id_p1,
 )
 fabric_energy = FabricManager(
     "energy",
     settings.fabric_sql_endpoint_p3,
     settings.fabric_database_p3,
+    workspace_id=settings.fabric_workspace_id_p3,
+    warehouse_id=settings.fabric_warehouse_id_p3,
 )
