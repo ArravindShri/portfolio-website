@@ -2,6 +2,7 @@
 @import './chrome.css';
 @import './home.css';
 @import './projects.css';
+@import './energy.css';
 
 @tailwind base;
 @tailwind components;
