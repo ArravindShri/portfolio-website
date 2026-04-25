@@ -321,6 +321,20 @@ function PricesSection() {
 //  03.3 — Trade flows   (gold_import_export_analysis)
 //  Bars: import_volume vs export_volume aggregated per country_name.
 // ===========================================================================
+// Per-product coverage notes — keyed exactly by the energy_product value
+// in gold_import_export_analysis. Products not in this map render no note
+// (e.g. "Natural Gas", or any future product without a known data gap).
+const IMPORTS_PRODUCT_NOTES = {
+  Petroleum:
+    'Petroleum: EIA publishes consumption only — no import/export volumes available. See Crude Oil for oil trade flows.',
+  'Crude Oil':
+    'Crude Oil: EIA reports production, imports & exports but not consumption (tracked under Petroleum as a refined product).',
+  Coal:
+    'Coal: limited trade data available for some countries. No global benchmark price exists.',
+  Electricity:
+    'Electricity: traded regionally, not globally. Only a few countries report cross-border electricity flows to the EIA.',
+};
+
 function ImportsSection() {
   const { data, loading, error, source, lastUpdated } = useApi('/api/energy/imports');
   const [product, setProduct] = useState('Crude Oil');
@@ -390,6 +404,10 @@ function ImportsSection() {
             ))}
             {unit && <span className="hint">unit: {unit}</span>}
           </div>
+        )}
+
+        {IMPORTS_PRODUCT_NOTES[product] && (
+          <div className="data-note">ℹ {IMPORTS_PRODUCT_NOTES[product]}</div>
         )}
 
         <div className="chart-frame">
