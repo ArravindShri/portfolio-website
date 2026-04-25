@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bar,
   BarChart,
@@ -35,11 +35,30 @@ const C = {
 };
 const SERIES_COLORS = [C.accent, C.good, C.warn, '#7BA7C9', '#B98AC9', C.bad];
 
-const fmtNumber = (v, opts = {}) => {
-  if (v == null || Number.isNaN(v)) return '—';
-  return Intl.NumberFormat('en-US', { maximumFractionDigits: 2, ...opts }).format(v);
+// Coerce a JSON-typed value into a usable number. Some Fabric numeric
+// columns historically arrived as strings (Decimal -> str); we tolerate
+// either shape so existing data + future fixes both render correctly.
+const toNum = (v) => {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v === 'string') {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
 };
-const fmtPct = (v) => (v == null ? '—' : `${v >= 0 ? '+' : ''}${fmtNumber(v)}%`);
+const isNum = (v) => toNum(v) != null;
+
+const fmtNumber = (v, opts = {}) => {
+  const n = toNum(v);
+  if (n == null) return '—';
+  return Intl.NumberFormat('en-US', { maximumFractionDigits: 2, ...opts }).format(n);
+};
+const fmtPct = (v) => {
+  const n = toNum(v);
+  if (n == null) return '—';
+  return `${n >= 0 ? '+' : ''}${fmtNumber(n)}%`;
+};
 
 // ---------------------------------------------------------------------------
 // Status chrome.
@@ -193,8 +212,8 @@ function PricesSection() {
     for (const r of data) {
       const x = r.period;
       const p = r.energy_product;
-      const v = r.avg_monthly_price;
-      if (x == null || p == null || typeof v !== 'number') continue;
+      const v = toNum(r.avg_monthly_price);
+      if (x == null || p == null || v == null) continue;
       if (!byPeriod.has(x)) byPeriod.set(x, { period: x });
       byPeriod.get(x)[p] = v;
     }
@@ -278,23 +297,41 @@ function PricesSection() {
 // ===========================================================================
 function ImportsSection() {
   const { data, loading, error, source, lastUpdated } = useApi('/api/energy/imports');
+  const [product, setProduct] = useState('Crude Oil');
 
+  // Distinct energy_product list (used by the chip row).
+  const products = useMemo(() => {
+    if (!Array.isArray(data) || data.length === 0) return [];
+    return Array.from(new Set(data.map((r) => r.energy_product).filter(Boolean))).sort();
+  }, [data]);
+
+  // Different products use different volume_units (BKWH/year vs Mbbl etc.),
+  // so we MUST filter by a single product before aggregating per country.
   const { rows, unit } = useMemo(() => {
     if (!Array.isArray(data) || data.length === 0) return { rows: [], unit: '' };
+    // Effective product: explicit pick, else Crude Oil if present, else first.
+    const effective = products.includes(product)
+      ? product
+      : products.includes('Crude Oil')
+      ? 'Crude Oil'
+      : products[0];
+    const filtered = data.filter((r) => r.energy_product === effective);
     const acc = new Map();
-    for (const r of data) {
+    for (const r of filtered) {
       const c = r.country_name;
       if (!c) continue;
       if (!acc.has(c)) acc.set(c, { country: c, imports: 0, exports: 0 });
-      if (typeof r.import_volume === 'number') acc.get(c).imports += r.import_volume;
-      if (typeof r.export_volume === 'number') acc.get(c).exports += r.export_volume;
+      const imp = toNum(r.import_volume);
+      const exp = toNum(r.export_volume);
+      if (imp != null) acc.get(c).imports += imp;
+      if (exp != null) acc.get(c).exports += exp;
     }
     const sorted = Array.from(acc.values())
       .sort((a, b) => b.imports + b.exports - (a.imports + a.exports))
       .slice(0, 12);
-    const unit = data.find((r) => r.volume_unit)?.volume_unit || '';
+    const unit = filtered.find((r) => r.volume_unit)?.volume_unit || '';
     return { rows: sorted, unit };
-  }, [data]);
+  }, [data, product, products]);
 
   const isEmpty = !loading && !error && rows.length === 0;
 
@@ -312,6 +349,23 @@ function ImportsSection() {
           </h2>
           <DataBadge source={source} lastUpdated={lastUpdated} error={error} loading={loading} />
         </div>
+
+        {products.length > 0 && (
+          <div className="filter-row">
+            <span className="label">Product</span>
+            {products.map((p) => (
+              <button
+                key={p}
+                className={`chip ${product === p ? 'on' : ''}`}
+                onClick={() => setProduct(p)}
+              >
+                {p}
+              </button>
+            ))}
+            {unit && <span className="hint">unit: {unit}</span>}
+          </div>
+        )}
+
         <div className="chart-frame">
           <StatePane loading={loading} error={error} empty={isEmpty}>
             <ResponsiveContainer width="100%" height={420}>
@@ -361,10 +415,11 @@ function CrisisSection() {
   const cards = useMemo(() => {
     if (!Array.isArray(data) || data.length === 0) return [];
     const ranked = [...data]
-      .filter((r) => typeof r.crisis_return_pct === 'number')
+      .filter((r) => isNum(r.crisis_return_pct))
       .sort(
         (a, b) =>
-          Math.abs(b.crisis_return_pct ?? 0) - Math.abs(a.crisis_return_pct ?? 0),
+          Math.abs(toNum(b.crisis_return_pct) ?? 0) -
+          Math.abs(toNum(a.crisis_return_pct) ?? 0),
       );
     return ranked.slice(0, 8).map((r, i) => ({
       id: `${r.crisis_id || r.crisis_name}-${r.ticker || i}`,
@@ -373,12 +428,12 @@ function CrisisSection() {
       company: r.company_name,
       asset: r.asset_type,
       category: r.category,
-      before: r.pre_crisis_price,
-      after: r.post_crisis_price,
-      pct: r.crisis_return_pct,
-      drawdown: r.max_drawdown_pct,
+      before: toNum(r.pre_crisis_price),
+      after: toNum(r.post_crisis_price),
+      pct: toNum(r.crisis_return_pct),
+      drawdown: toNum(r.max_drawdown_pct),
       recovered: r.has_recovered,
-      recoveryDays: r.recovery_days,
+      recoveryDays: toNum(r.recovery_days),
     }));
   }, [data]);
 
@@ -467,22 +522,21 @@ function StocksSection() {
     if (!Array.isArray(data) || data.length === 0) return [];
     const filtered = data
       .filter((r) => category === 'All' || r.category === category)
-      .filter((r) => typeof r.yoy_return_pct === 'number');
+      .filter((r) => isNum(r.yoy_return_pct))
+      .map((r) => ({ ...r, _yoy: toNum(r.yoy_return_pct) }));
     filtered.sort((a, b) =>
-      sortDir === 'top'
-        ? b.yoy_return_pct - a.yoy_return_pct
-        : a.yoy_return_pct - b.yoy_return_pct,
+      sortDir === 'top' ? b._yoy - a._yoy : a._yoy - b._yoy,
     );
     return filtered.slice(0, 15).map((r) => ({
       ticker: r.ticker,
       company: r.company_name,
-      yoy: r.yoy_return_pct,
+      yoy: r._yoy,
       category: r.category,
       country: r.country_name,
       role: r.energy_role,
-      vol: r.volatility,
-      sharpe: r.sharpe_ratio,
-      price: r.current_price_usd,
+      vol: toNum(r.volatility),
+      sharpe: toNum(r.sharpe_ratio),
+      price: toNum(r.current_price_usd),
     }));
   }, [data, category, sortDir]);
 
@@ -567,16 +621,17 @@ function StocksSection() {
           <div className="stocks-meta">
             <span>
               avg volatility{' '}
-              {fmtPct(
-                rows.reduce((s, r) => s + (r.vol ?? 0), 0) / rows.filter((r) => r.vol != null).length,
-              )}
+              {(() => {
+                const vols = rows.map((r) => r.vol).filter((v) => v != null);
+                return vols.length ? fmtPct(vols.reduce((s, v) => s + v, 0) / vols.length) : '—';
+              })()}
             </span>
             <span>
               avg sharpe{' '}
-              {fmtNumber(
-                rows.reduce((s, r) => s + (r.sharpe ?? 0), 0) /
-                  rows.filter((r) => r.sharpe != null).length,
-              )}
+              {(() => {
+                const sh = rows.map((r) => r.sharpe).filter((v) => v != null);
+                return sh.length ? fmtNumber(sh.reduce((s, v) => s + v, 0) / sh.length) : '—';
+              })()}
             </span>
           </div>
         )}
@@ -604,16 +659,64 @@ function CountrySection() {
   }, [overview]);
 
   const [picked, setPicked] = useState(null);
-  const path = picked ? `/api/energy/country/${encodeURIComponent(picked)}` : null;
-  const { data, loading, error, source, lastUpdated } = useApi(path, { skip: !picked });
+
+  // Client-side cache keyed by country_id. Survives picks but not page
+  // reload. Stored in a ref so reads/writes don't trigger re-renders.
+  // Each entry: { data, source, lastUpdated, cachedAt }.
+  const cacheRef = useRef({});
+  const cached = picked ? cacheRef.current[picked] : null;
+
+  // Only hit the network when we don't already have this country cached.
+  const path =
+    picked && !cached ? `/api/energy/country/${encodeURIComponent(picked)}` : null;
+  const fetched = useApi(path, { skip: !path });
+
+  // When fresh data arrives, stash it.
+  useEffect(() => {
+    if (!picked || cached || !fetched.data) return;
+    cacheRef.current[picked] = {
+      data: fetched.data,
+      source: fetched.source || 'live',
+      lastUpdated: fetched.lastUpdated || new Date().toISOString(),
+    };
+  }, [picked, cached, fetched.data, fetched.source, fetched.lastUpdated]);
+
+  // Effective view of fetch state — cached picks are instantly "loaded".
+  const view = cached
+    ? {
+        data: cached.data,
+        loading: false,
+        error: null,
+        source: 'cache',
+        lastUpdated: cached.lastUpdated,
+      }
+    : fetched;
+  const { data, loading, error, source, lastUpdated } = view;
 
   const buckets = useMemo(() => {
     if (!data || typeof data !== 'object') return null;
+    // Bug 4: gold_crisis_analysis can return thousands of dupes. Dedupe by
+    // (crisis_id, ticker) for crisis and by ticker for stocks. Keep first.
+    const dedupe = (rows, keyFn) => {
+      if (!Array.isArray(rows)) return [];
+      const seen = new Set();
+      const out = [];
+      for (const r of rows) {
+        const k = keyFn(r);
+        if (k == null || seen.has(k)) continue;
+        seen.add(k);
+        out.push(r);
+      }
+      return out;
+    };
     return {
       overview: Array.isArray(data.overview) ? data.overview : [],
       imports: Array.isArray(data.imports) ? data.imports : [],
-      crisis: Array.isArray(data.crisis) ? data.crisis : [],
-      stocks: Array.isArray(data.stocks) ? data.stocks : [],
+      crisis: dedupe(
+        data.crisis,
+        (r) => `${r.crisis_id ?? r.crisis_name ?? ''}::${r.ticker ?? ''}`,
+      ),
+      stocks: dedupe(data.stocks, (r) => r.ticker),
     };
   }, [data]);
 
@@ -758,17 +861,15 @@ function CountryBucket({ bucket, rows }) {
         <tbody>
           {rows.slice(0, 8).map((r, i) => (
             <tr key={i}>
-              {cols.map(([k]) => (
-                <td key={k}>
-                  {typeof r[k] === 'number'
-                    ? fmtNumber(r[k])
-                    : r[k] === true
-                    ? '✓'
-                    : r[k] === false
-                    ? '—'
-                    : String(r[k] ?? '—')}
-                </td>
-              ))}
+              {cols.map(([k]) => {
+                const v = r[k];
+                // Booleans first (avoid coercing to numbers).
+                if (v === true) return <td key={k}>✓</td>;
+                if (v === false) return <td key={k}>—</td>;
+                // Numeric values, including numeric strings, get formatted.
+                if (isNum(v)) return <td key={k}>{fmtNumber(v)}</td>;
+                return <td key={k}>{String(v ?? '—')}</td>;
+              })}
             </tr>
           ))}
         </tbody>

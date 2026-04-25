@@ -30,6 +30,7 @@ from __future__ import annotations
 import logging
 import struct
 import threading
+from decimal import Decimal
 from typing import Any, Iterable, Sequence
 
 import requests
@@ -161,7 +162,25 @@ class PyodbcTokenBackend(FabricBackend):
             cur = conn.cursor()
             cur.execute(sql, params or [])
             cols = [c[0] for c in cur.description] if cur.description else []
-            return [dict(zip(cols, row)) for row in cur.fetchall()]
+            return [_sanitize_row(dict(zip(cols, row))) for row in cur.fetchall()]
+
+
+def _sanitize_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Coerce pyodbc-native types into JSON-friendly primitives.
+
+    pyodbc returns ``decimal.Decimal`` for SQL numeric/decimal columns.
+    FastAPI / Starlette's default JSON encoder serializes ``Decimal`` as a
+    string (e.g. ``"71.974091"``) which then fails ``typeof v === 'number'``
+    checks on the frontend, causing rows to be silently filtered out. We
+    convert to float here so the JSON shape is consistent across backends.
+    """
+    out: dict[str, Any] = {}
+    for k, v in row.items():
+        if isinstance(v, Decimal):
+            out[k] = float(v)
+        else:
+            out[k] = v
+    return out
 
 
 class FabricRestApiBackend(FabricBackend):
