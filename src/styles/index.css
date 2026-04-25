@@ -5,6 +5,7 @@
 @import './energy.css';
 @import './defense.css';
 @import './portfolio.css';
+@import './journey.css';
 
 @tailwind base;
 @tailwind components;

@@ -1,0 +1,283 @@
+/* ————— Journey · long-form career page ————— */
+
+.jr-eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.jr-hero {
+  padding: 48px 0 56px;
+  border-bottom: 1px solid var(--rule);
+}
+.jr-hero h1 {
+  font-family: var(--sans);
+  font-size: clamp(40px, 6vw, 84px);
+  line-height: 1;
+  letter-spacing: -0.035em;
+  font-weight: 500;
+  margin: 18px 0 20px;
+  text-wrap: balance;
+}
+.jr-hero h1 em {
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--accent);
+  font-weight: 400;
+}
+.jr-hero .lede {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 22px;
+  color: var(--ink-2);
+  max-width: 720px;
+  line-height: 1.5;
+  text-wrap: pretty;
+  margin: 0;
+}
+
+.jr-meta {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  margin-top: 36px;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+.jr-meta .cell {
+  padding: 18px 20px;
+  border-right: 1px solid var(--rule);
+}
+.jr-meta .cell:last-child { border-right: 0; }
+.jr-meta .k {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.jr-meta .v {
+  font-family: var(--sans);
+  font-size: 22px;
+  color: var(--ink);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.jr-meta .sub {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  margin-top: 4px;
+}
+
+/* ————— Chapter timeline ————— */
+.chapter {
+  padding: 64px 0;
+  border-bottom: 1px solid var(--rule);
+}
+.chapter:nth-child(even) { background: var(--bg-1); }
+.chapter-grid {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 48px;
+  align-items: start;
+}
+
+.chapter-meta .yr {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding-top: 6px;
+  border-top: 1px solid var(--accent-dim);
+  margin-bottom: 10px;
+}
+.chapter-meta .ch {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+.chapter-meta .place {
+  font-family: var(--sans);
+  font-size: 17px;
+  color: var(--ink);
+  font-weight: 500;
+}
+.chapter-meta .role {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 15px;
+  color: var(--ink-2);
+  margin-top: 4px;
+}
+.chapter-meta .stack-list {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px dotted var(--rule);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-2);
+}
+.chapter-meta .stack-list span {
+  color: var(--ink-3);
+  margin-right: 8px;
+}
+
+.chapter-body h2 {
+  font-family: var(--sans);
+  font-size: clamp(26px, 3.4vw, 40px);
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+  font-weight: 500;
+  margin: 0 0 18px;
+  text-wrap: balance;
+}
+.chapter-body h2 em {
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--accent);
+  font-weight: 400;
+}
+.chapter-body p {
+  font-size: 16px;
+  line-height: 1.65;
+  color: var(--ink-2);
+  max-width: 680px;
+  margin: 0 0 16px;
+  text-wrap: pretty;
+}
+.chapter-body p em {
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--ink);
+}
+.chapter-body .pull {
+  font-family: var(--serif);
+  font-size: 24px;
+  font-style: italic;
+  color: var(--ink);
+  line-height: 1.35;
+  max-width: 680px;
+  padding: 20px 0 20px 24px;
+  margin: 20px 0;
+  border-left: 2px solid var(--accent);
+}
+.chapter-body .pull .attrib {
+  display: block;
+  margin-top: 10px;
+  font-family: var(--mono);
+  font-style: normal;
+  font-size: 11px;
+  color: var(--ink-3);
+  letter-spacing: 0.1em;
+}
+.chapter-body .lesson {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 18px;
+  padding: 16px 0 0;
+  margin-top: 20px;
+  border-top: 1px dotted var(--rule);
+}
+.chapter-body .lesson .tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 600;
+}
+.chapter-body .lesson .txt {
+  font-family: var(--sans);
+  font-size: 15px;
+  color: var(--ink);
+  line-height: 1.55;
+}
+.chapter-body .lesson .txt em {
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--accent);
+  font-size: 16px;
+}
+
+/* ————— Closing ————— */
+.jr-close {
+  padding: 72px 0;
+  text-align: left;
+}
+.jr-close .jr-eyebrow {
+  margin-bottom: 20px;
+  display: inline-block;
+}
+.jr-close h2 {
+  font-family: var(--sans);
+  font-size: clamp(30px, 4.2vw, 52px);
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  font-weight: 500;
+  max-width: 860px;
+  margin: 0 0 24px;
+}
+.jr-close h2 em {
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--accent);
+  font-weight: 400;
+}
+.jr-close .jr-close-lede {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 20px;
+  color: var(--ink-2);
+  max-width: 720px;
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+.jr-close .ctas {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 30px;
+}
+.jr-close .btn {
+  padding: 13px 20px;
+  border: 1px solid var(--rule-2);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--bg-1);
+  transition: all 0.14s ease;
+  display: inline-block;
+}
+.jr-close .btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.jr-close .btn.primary {
+  background: var(--accent);
+  color: #1a1816;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.jr-close .btn.primary:hover {
+  color: #1a1816;
+}
+
+@media (max-width: 900px) {
+  .chapter-grid { grid-template-columns: 1fr; gap: 24px; }
+  .jr-meta { grid-template-columns: 1fr 1fr; }
+  .jr-meta .cell:nth-child(2) { border-right: 0; }
+  .jr-meta .cell:nth-child(-n+2) { border-bottom: 1px solid var(--rule); }
+}
