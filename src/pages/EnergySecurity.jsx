@@ -60,22 +60,18 @@ const fmtPct = (v) => {
   return `${n >= 0 ? '+' : ''}${fmtNumber(n)}%`;
 };
 
-// Format an ISO timestamp as "Apr 25, 2026 · 1:23 PM" for the freshness
-// banner. Returns null if the input doesn't parse.
-const fmtRefreshTs = (iso) => {
+// Format an ISO timestamp as "Apr 25, 2026" for the freshness banner.
+// The Power BI refresh runs daily, so the date alone is the meaningful
+// signal. Returns null if the input doesn't parse.
+const fmtRefreshDate = (iso) => {
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
-  const date = d.toLocaleDateString('en-US', {
+  return d.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
   });
-  const time = d.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-  return `${date} · ${time}`;
 };
 
 // ---------------------------------------------------------------------------
@@ -193,7 +189,7 @@ function HeroSection() {
               <span className="lbl">Fabric · Live</span>
               <span className="sep">—</span>
               <span className="ts">
-                Last refreshed {fmtRefreshTs(lastUpdated) ?? '—'}
+                Data as of {fmtRefreshDate(lastUpdated) ?? '—'}
               </span>
             </div>
           </div>
@@ -687,16 +683,19 @@ function CountrySection() {
     // Join on country_name instead of country_id — the gold tables don't
     // share a consistent id, so id-based fan-out queries returned the
     // wrong country's crisis/stocks rows. Names are stable across views.
+    // Explicit String() coercion guarantees the id we hand to setPicked
+    // is always a string, even if Fabric ever returns a numeric label.
     const seen = new Set();
     const out = [];
     for (const r of overview) {
-      const name = r.country_name;
-      if (name && !seen.has(name)) {
-        seen.add(name);
-        out.push({ id: name, name });
-      }
+      const raw = r.country_name;
+      if (raw == null || raw === '') continue;
+      const name = String(raw);
+      if (seen.has(name)) continue;
+      seen.add(name);
+      out.push({ id: name, name });
     }
-    return out.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    return out.sort((a, b) => a.name.localeCompare(b.name));
   }, [overview]);
 
   const [picked, setPicked] = useState(null);

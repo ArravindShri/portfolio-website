@@ -9,7 +9,7 @@
 }
 .topbar-row {
   display: grid;
-  grid-template-columns: 280px 1fr 280px;
+  grid-template-columns: 280px 1fr 340px;
   align-items: center;
   height: 44px;
   font-family: var(--mono);

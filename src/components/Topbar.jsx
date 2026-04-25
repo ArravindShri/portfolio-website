@@ -13,6 +13,15 @@ export default function Topbar() {
   const hh = String(time.getUTCHours()).padStart(2, '0');
   const mm = String(time.getUTCMinutes()).padStart(2, '0');
   const ss = String(time.getUTCSeconds()).padStart(2, '0');
+  // Date in UTC, formatted to match the freshness banner: "Apr 25, 2026".
+  // Recomputed every tick alongside the seconds counter — the date crosses
+  // midnight UTC without a refresh.
+  const dateStr = time.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
 
   return (
     <header className="topbar">
@@ -47,7 +56,7 @@ export default function Topbar() {
               FABRIC · LIVE
             </span>
             <span>
-              {hh}:{mm}:{ss} UTC
+              {dateStr} {hh}:{mm}:{ss} UTC
             </span>
           </div>
         </div>
