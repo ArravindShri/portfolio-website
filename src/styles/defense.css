@@ -214,3 +214,36 @@
   .defense-hero .hero-row { grid-template-columns: 1fr; gap: 32px; }
   .feedback-grid { grid-template-columns: 1fr; }
 }
+
+/* ————— Mobile responsiveness ————— */
+@media (max-width: 720px) {
+  .defense-hero { padding: 32px 0 36px; }
+  .defense-hero h1 { font-size: clamp(36px, 9vw, 56px); }
+  .defense-hero .lede { font-size: 15px; }
+
+  .defense-hero .hero-kpis,
+  .hero-kpis { grid-template-columns: 1fr 1fr; }
+  .hero-kpis .kpi { padding: 14px 14px 12px; }
+  .hero-kpis .v { font-size: 22px; }
+
+  .defense-overview,
+  .defense-imports,
+  .defense-exports,
+  .defense-partnerships,
+  .defense-feedback,
+  .defense-companies { padding: 32px 0; }
+
+  .panel-head { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .panel-head h2 { font-size: clamp(20px, 5.5vw, 26px); max-width: 100%; }
+
+  .filter-row { flex-wrap: wrap; gap: 6px; padding: 8px 10px; }
+
+  .feedback-grid { grid-template-columns: 1fr; gap: 14px; }
+  .latest-kpis { grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .chart-frame { padding: 14px 10px 10px; }
+
+  .mini-table { padding: 8px 10px 10px; }
+  .mini-table table { min-width: 580px; }
+  .companies-table table { min-width: 640px; }
+}

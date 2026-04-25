@@ -372,3 +372,47 @@
   }
   .term-field-row { grid-template-columns: 1fr; }
 }
+
+/* ————— Mobile responsiveness ————— */
+@media (max-width: 720px) {
+  .ct-hero { padding: 32px 0 28px; }
+  .ct-hero h1 { font-size: clamp(32px, 9vw, 48px); margin: 14px 0 16px; }
+  .ct-hero .lede { font-size: 17px; }
+
+  .ct-left { padding: 28px 0 32px 0; }
+  .ct-right { padding: 28px 0 32px 0; }
+
+  .term-body { padding: 14px 14px 18px; }
+  .term-line { gap: 8px; flex-wrap: wrap; }
+  .term-comment { padding-left: 18px; font-size: 10.5px; }
+  .term-field { padding-left: 14px; }
+  .term-radio {
+    padding-left: 14px;
+    gap: 6px;
+  }
+  .term-radio button { padding: 6px 10px; font-size: 10.5px; }
+  .term-cta {
+    padding-left: 14px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .term-cta button { padding: 11px 18px; }
+  .term-bar .right { display: none; }
+  .term-bar .title { font-size: 9.5px; }
+
+  .ch-row {
+    grid-template-columns: 76px 1fr;
+    gap: 8px;
+    padding: 10px 0;
+  }
+  .ch-row .badge {
+    grid-column: 1 / -1;
+    justify-self: start;
+    margin-top: 2px;
+  }
+  .ch-row .v { font-size: 12px; word-break: break-word; }
+
+  .avail-grid { gap: 2px; }
+  .avail-cell { font-size: 8px; }
+  .avail-legend { gap: 10px; font-size: 9.5px; flex-wrap: wrap; }
+}

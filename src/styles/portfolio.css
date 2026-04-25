@@ -335,3 +335,39 @@
   .correlation-grid td { width: 36px; height: 28px; font-size: 9px; }
   .correlation-grid th.row-h { width: 52px; font-size: 9px; }
 }
+
+/* ————— Mobile responsiveness · extended ————— */
+@media (max-width: 720px) {
+  .portfolio-hero { padding: 32px 0 36px; }
+  .portfolio-hero .hero-row { grid-template-columns: 1fr; gap: 24px; align-items: stretch; }
+  .portfolio-hero h1 { font-size: clamp(36px, 9vw, 56px); margin-bottom: 16px; }
+  .portfolio-hero .lede { font-size: 15px; }
+
+  .portfolio-currency,
+  .portfolio-categories,
+  .portfolio-regions,
+  .portfolio-dividends,
+  .portfolio-correlation { padding: 32px 0; }
+
+  .panel-head { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .panel-head h2 { font-size: clamp(20px, 5.5vw, 26px); max-width: 100%; }
+
+  .hero-kpis { grid-template-columns: 1fr 1fr; }
+  .hero-kpis .kpi { padding: 14px 14px 12px; }
+
+  .category-cards { grid-template-columns: 1fr; }
+  .region-cards { grid-template-columns: 1fr; }
+
+  .filter-row { flex-wrap: wrap; gap: 6px; padding: 8px 10px; }
+
+  .chart-frame { padding: 14px 10px 10px; }
+
+  .mini-table { padding: 8px 10px 10px; }
+  .mini-table table { min-width: 600px; }
+
+  /* Heatmap stays inside its scroll wrapper. Smaller cells already set in
+   * the existing 720px block above. */
+  .corr-wrap { -webkit-overflow-scrolling: touch; }
+  .corr-legend { font-size: 9px; gap: 6px; }
+  .corr-legend .swatch { width: 14px; height: 10px; }
+}

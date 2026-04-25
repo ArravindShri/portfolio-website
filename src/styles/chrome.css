@@ -369,3 +369,46 @@
   max-width: 56ch;
   text-wrap: pretty;
 }
+
+/* ————— Mobile responsiveness · topbar / ticker / banners ————— */
+@media (max-width: 720px) {
+  .topbar-row {
+    grid-template-columns: auto 1fr;
+    height: 40px;
+    font-size: 10px;
+    gap: 10px;
+  }
+  /* The right-hand FABRIC·LIVE meta drops below 720px to make room for
+   * brand + nav. The same status is surfaced inside each hero anyway. */
+  .topbar .top-meta { display: none; }
+  /* Force nav visible (overrides home.css's broader `.nav { display: none }`
+   * via higher specificity). */
+  .topbar .nav {
+    display: flex !important;
+    justify-content: flex-end;
+    gap: 14px;
+    font-size: 10px;
+  }
+  .topbar .nav a .idx { display: none; }
+  .brand-sub { display: none; }
+  .brand-name { font-size: 10.5px; }
+  .brand-mark { width: 18px; height: 18px; }
+
+  .ticker { font-size: 10px; }
+  .ticker-row { padding: 7px 0; }
+
+  .freshness-banner {
+    font-size: 10px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .repo-cta { margin-top: 10px; }
+  .repo-link { padding: 8px 12px; }
+  .repo-cta .repo-desc { display: none; }
+}
+
+@media (max-width: 480px) {
+  .topbar .nav { gap: 10px; font-size: 9.5px; }
+  .ticker { display: none; }
+}

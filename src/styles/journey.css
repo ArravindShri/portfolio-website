@@ -281,3 +281,41 @@
   .jr-meta .cell:nth-child(2) { border-right: 0; }
   .jr-meta .cell:nth-child(-n+2) { border-bottom: 1px solid var(--rule); }
 }
+
+/* ————— Mobile responsiveness ————— */
+@media (max-width: 720px) {
+  .jr-hero { padding: 32px 0 36px; }
+  .jr-hero h1 { font-size: clamp(32px, 9vw, 48px); margin: 14px 0 16px; }
+  .jr-hero .lede { font-size: 17px; }
+
+  .jr-meta { grid-template-columns: 1fr; }
+  .jr-meta .cell {
+    border-right: 0;
+    border-bottom: 1px solid var(--rule);
+    padding: 14px 16px;
+  }
+  .jr-meta .cell:last-child { border-bottom: 0; }
+
+  .chapter { padding: 40px 0; }
+  .chapter-grid { gap: 20px; }
+  .chapter-meta .yr { font-size: 10px; }
+  .chapter-body h2 { font-size: clamp(22px, 6vw, 30px); }
+  .chapter-body p { font-size: 15px; max-width: 100%; }
+  .chapter-body .pull {
+    font-size: 18px;
+    padding: 14px 0 14px 16px;
+    margin: 16px 0;
+  }
+  .chapter-body .lesson {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    padding-top: 12px;
+    margin-top: 16px;
+  }
+
+  .jr-close { padding: 48px 0; }
+  .jr-close h2 { font-size: clamp(24px, 7vw, 36px); }
+  .jr-close .jr-close-lede { font-size: 16px; }
+  .jr-close .ctas { flex-direction: column; align-items: stretch; }
+  .jr-close .btn { text-align: center; padding: 12px 16px; }
+}

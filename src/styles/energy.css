@@ -494,3 +494,52 @@
     white-space: normal;
   }
 }
+
+/* ————— Mobile responsiveness ————— */
+@media (max-width: 720px) {
+  .energy-hero { padding: 32px 0 36px; }
+  .energy-hero .hero-row { grid-template-columns: 1fr; gap: 24px; align-items: stretch; }
+  .energy-hero h1 { font-size: clamp(36px, 9vw, 56px); margin-bottom: 16px; }
+  .energy-hero .lede { font-size: 15px; }
+  .energy-hero .meta-row { gap: 8px; flex-wrap: wrap; font-size: 10px; }
+
+  .hero-kpis { grid-template-columns: 1fr 1fr; }
+  .hero-kpis .kpi { padding: 14px 14px 12px; }
+  .hero-kpis .v { font-size: 22px; }
+
+  .energy-prices,
+  .energy-imports,
+  .energy-crisis,
+  .energy-stocks,
+  .energy-country,
+  .energy-data-notes { padding: 32px 0; }
+
+  .panel-head { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .panel-head h2 { font-size: clamp(20px, 5.5vw, 26px); max-width: 100%; }
+
+  .energy-prices .filter-row,
+  .energy-stocks .filter-row,
+  .energy-country .filter-row {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 10px;
+  }
+  .filter-row .chip,
+  .filter-row .label { font-size: 10px; }
+
+  .country-grid { grid-template-columns: 1fr; gap: 12px; }
+
+  .crisis-grid { grid-template-columns: 1fr; }
+  .crisis-card .delta { font-size: 26px; }
+
+  .chart-frame { padding: 14px 10px 10px; }
+
+  /* Tables become horizontally scrollable. The .mini-table wrapper already
+   * has overflow-x: auto; the inner table needs min-width so it actually
+   * exceeds the viewport and triggers the scroll. */
+  .mini-table { padding: 8px 10px 10px; }
+  .mini-table table { min-width: 540px; }
+  .data-notes-table table { min-width: 540px; }
+
+  .stocks-meta { flex-wrap: wrap; gap: 12px; justify-content: flex-start; }
+}

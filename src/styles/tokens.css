@@ -89,3 +89,12 @@ button {
   position: relative;
   z-index: 1;
 }
+
+/* ————— Global responsive foundation ————— */
+@media (max-width: 1100px) {
+  .container { padding: 0 24px; }
+}
+@media (max-width: 720px) {
+  html, body { overflow-x: hidden; }
+  .container { padding: 0 16px; }
+}

@@ -419,4 +419,5 @@
   .earlier-head { flex-direction: column; align-items: flex-start; gap: 10px; }
   .earlier-head .note { text-align: left; }
   .cards { gap: 16px; }
+  .filter-row { flex-wrap: wrap; gap: 6px; }
 }
