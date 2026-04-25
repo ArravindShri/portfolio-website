@@ -1,0 +1,374 @@
+/* ————— Contact · open channels ————— */
+
+.ct-eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.ct-hero {
+  padding: 48px 0 36px;
+  border-bottom: 1px solid var(--rule);
+}
+.ct-hero h1 {
+  font-family: var(--sans);
+  font-size: clamp(40px, 6vw, 80px);
+  line-height: 1;
+  letter-spacing: -0.035em;
+  font-weight: 500;
+  margin: 18px 0 18px;
+  text-wrap: balance;
+}
+.ct-hero h1 em {
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--accent);
+  font-weight: 400;
+}
+.ct-hero .lede {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 22px;
+  color: var(--ink-2);
+  max-width: 720px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.ct-section { /* hosting wrapper for the grid */ }
+
+.ct-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 0;
+  border-bottom: 1px solid var(--rule);
+}
+.ct-left {
+  border-right: 1px solid var(--rule);
+  padding: 40px 40px 48px 0;
+}
+/* The right column extends its background to the viewport edge using a
+ * negative margin + matching padding trick, mirroring the design. */
+.ct-right {
+  padding: 40px 0 48px 40px;
+  background: var(--bg-1);
+  margin-right: -100vw;
+  padding-right: 100vw;
+}
+
+/* ————— Terminal form ————— */
+.term {
+  background: #0F0E0D;
+  border: 1px solid #2A2723;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: #E8DFD3;
+  border-radius: 0;
+}
+.term-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-bottom: 1px solid #2A2723;
+  background: #1A1816;
+}
+.term-bar .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #3A3530;
+}
+.term-bar .dot.live {
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+}
+.term-bar .title {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: #998E7D;
+  letter-spacing: 0.1em;
+  margin-left: 8px;
+}
+.term-bar .right {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: #6A6357;
+}
+.term-body { padding: 18px 18px 22px; }
+.term-line {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+  align-items: baseline;
+}
+.term-prompt {
+  color: var(--accent);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.term-key { color: #7A8E5A; }
+.term-val { color: #E8DFD3; }
+.term-comment {
+  color: #6A6357;
+  font-style: italic;
+  margin-top: -8px;
+  margin-bottom: 12px;
+  padding-left: 22px;
+  font-size: 11px;
+}
+
+.term-input {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: #F5ECDD;
+  padding: 6px 0;
+  border-bottom: 1px solid #2A2723;
+}
+.term-input:focus { border-bottom-color: var(--accent); }
+.term-input::placeholder { color: #4A4540; }
+.term-textarea {
+  width: 100%;
+  background: transparent;
+  border: 1px solid #2A2723;
+  outline: 0;
+  padding: 10px 12px;
+  resize: vertical;
+  min-height: 110px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: #F5ECDD;
+  line-height: 1.55;
+}
+.term-textarea:focus { border-color: var(--accent); }
+.term-textarea::placeholder { color: #4A4540; }
+.term-field { margin: 14px 0 4px; padding-left: 22px; }
+.term-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+.term-radio {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-left: 22px;
+  margin-top: 10px;
+}
+.term-radio button {
+  background: transparent;
+  border: 1px solid #2A2723;
+  color: #998E7D;
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+}
+.term-radio button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.term-radio button.on {
+  background: var(--accent);
+  color: #1A1816;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.term-cta {
+  margin-top: 22px;
+  padding-left: 22px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.term-cta button {
+  background: var(--accent);
+  color: #1A1816;
+  border: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 12px 22px;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+.term-cta button:hover { background: #F0A572; }
+.term-cta .help {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: #6A6357;
+}
+
+.term-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-top: 1px solid #2A2723;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: #6A6357;
+  letter-spacing: 0.04em;
+}
+.term-status .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: ct-blink 1.4s infinite;
+}
+@keyframes ct-blink {
+  50% { opacity: 0.3; }
+}
+
+/* ————— Right side · channels ————— */
+.ch-section { margin-bottom: 28px; }
+.ch-section.last { margin-bottom: 0; }
+.ch-section h3 {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin: 0 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--rule);
+}
+.ch-row {
+  display: grid;
+  grid-template-columns: 90px 1fr auto;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px dotted var(--rule);
+  align-items: baseline;
+}
+.ch-row.no-border { border-bottom: 0; }
+.ch-row.tight { padding-top: 0; }
+.ch-row .k {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.ch-row .v {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink);
+  font-weight: 500;
+}
+.ch-row .v a { color: var(--ink); text-decoration: none; }
+.ch-row .v a:hover { color: var(--accent); }
+.ch-row .badge {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--accent);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid var(--accent-dim);
+  padding: 3px 7px;
+}
+
+/* ————— Availability heatmap ————— */
+.avail-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-top: 10px;
+}
+.avail-cell {
+  aspect-ratio: 1.5 / 1;
+  font-family: var(--mono);
+  font-size: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-3);
+  border: 1px solid var(--rule);
+}
+.avail-cell.day-h {
+  background: transparent;
+  border-bottom: 2px solid var(--rule-2);
+  border-top: 0;
+  border-left: 0;
+  border-right: 0;
+  color: var(--ink-2);
+  font-weight: 600;
+}
+.avail-cell.lo { background: rgba(216,127,69,0.08); }
+.avail-cell.md { background: rgba(216,127,69,0.22); color: var(--ink-2); }
+.avail-cell.hi { background: rgba(216,127,69,0.55); color: #1A1816; font-weight: 600; }
+.avail-legend {
+  display: flex;
+  gap: 14px;
+  margin-top: 10px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+}
+.avail-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.avail-legend i {
+  width: 10px;
+  height: 10px;
+  display: inline-block;
+  border: 1px solid var(--rule);
+}
+.avail-foot {
+  margin-top: 14px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+
+/* ————— "What I'm open to" list ————— */
+.now-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+.now-list .item {
+  display: grid;
+  grid-template-columns: 14px 1fr;
+  gap: 8px;
+}
+.now-list .item span { color: var(--accent); }
+.now-list .item.muted { color: var(--ink-3); }
+.now-list .item.muted span { color: var(--ink-3); }
+
+@media (max-width: 900px) {
+  .ct-grid { grid-template-columns: 1fr; }
+  .ct-left {
+    border-right: 0;
+    border-bottom: 1px solid var(--rule);
+    padding-right: 0;
+  }
+  .ct-right {
+    padding-left: 0;
+    margin-right: 0;
+    padding-right: 0;
+  }
+  .term-field-row { grid-template-columns: 1fr; }
+}

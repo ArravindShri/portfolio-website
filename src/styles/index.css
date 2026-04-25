@@ -6,6 +6,7 @@
 @import './defense.css';
 @import './portfolio.css';
 @import './journey.css';
+@import './contact.css';
 
 @tailwind base;
 @tailwind components;
