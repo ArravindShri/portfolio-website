@@ -1,7 +1,11 @@
 import { useState } from 'react';
-import { apiUrl } from '../lib/api.js';
 
 const INTENTS = ['hiring', 'collab', 'consulting', 'just-curious'];
+
+// Web3Forms public access key. The endpoint accepts JSON, validates the
+// access_key server-side, and forwards the message to the configured inbox.
+const WEB3FORMS_ENDPOINT = 'https://api.web3forms.com/submit';
+const WEB3FORMS_ACCESS_KEY = '69975f17-4d28-4000-bed2-8372b90c531c';
 
 // ---------------------------------------------------------------------------
 // Terminal-styled contact form. POSTs to /api/contact (FastAPI on Railway),
@@ -35,19 +39,34 @@ function Term() {
     setStatus('sending');
     setErrorMsg('');
     try {
-      const res = await fetch(apiUrl('/api/contact'), {
+      const res = await fetch(WEB3FORMS_ENDPOINT, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          access_key: WEB3FORMS_ACCESS_KEY,
+          name: formData.name,
+          email: formData.email,
+          subject: `Portfolio Contact: ${formData.intent || 'General'} — ${formData.name}`,
+          message: formData.message,
+          org: formData.org || '(not provided)',
+          intent: formData.intent || '(not selected)',
+          from_name: 'Portfolio Contact Form',
+        }),
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || data.message || 'Failed to send');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(
+          data.message || data.error || `Failed to send (HTTP ${res.status})`,
+        );
       }
       setStatus('sent');
       setFormData({ name: '', email: '', org: '', intent: 'hiring', message: '' });
     } catch (err) {
-      setErrorMsg(err.message || String(err));
+      console.error('[contact] submission failed:', err);
+      setErrorMsg(err?.message || String(err));
       setStatus('error');
     }
   };
@@ -246,41 +265,6 @@ export default function Contact() {
                     </a>
                   </span>
                   <span className="badge">code</span>
-                </div>
-              </div>
-
-              <div className="ch-section">
-                <h3>Response window · IST (UTC+5:30)</h3>
-                <div className="avail-grid">
-                  {DAY_LABELS.map((d, i) => (
-                    <div key={`d-${i}`} className="avail-cell day-h">
-                      {d}
-                    </div>
-                  ))}
-                  {AVAILABILITY.flat().map((c, i) => (
-                    <div key={`c-${i}`} className={`avail-cell ${c}`}>
-                      {c}
-                    </div>
-                  ))}
-                </div>
-                <div className="avail-legend">
-                  <span>
-                    <i style={{ background: 'rgba(216,127,69,0.08)' }} />
-                    quiet
-                  </span>
-                  <span>
-                    <i style={{ background: 'rgba(216,127,69,0.22)' }} />
-                    checking
-                  </span>
-                  <span>
-                    <i style={{ background: 'rgba(216,127,69,0.55)' }} />
-                    online
-                  </span>
-                </div>
-                <div className="avail-foot">
-                  Rows = morning · afternoon · evening (IST). Most replies land
-                  within 48 hours; urgent things tagged in subject line move
-                  faster.
                 </div>
               </div>
 
