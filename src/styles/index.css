@@ -4,6 +4,7 @@
 @import './projects.css';
 @import './energy.css';
 @import './defense.css';
+@import './portfolio.css';
 
 @tailwind base;
 @tailwind components;

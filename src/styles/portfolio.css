@@ -1,0 +1,337 @@
+/* ————— Investment Portfolio deep-dive ————— */
+
+/* Reuse the shared hero layout already shipped via energy.css. The hero,
+ * panel-head, chart-frame, mini-table, pane-state, filter-row, chip,
+ * data-badge, freshness-banner, and hero-kpis classes are all defined
+ * globally — we only add portfolio-specific tweaks below. */
+
+.portfolio-hero {
+  padding: 48px 0 56px;
+}
+.portfolio-hero .hero-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 56px;
+  align-items: end;
+  margin-top: 28px;
+}
+.portfolio-hero h1 {
+  font-family: var(--sans);
+  font-size: clamp(48px, 6vw, 88px);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  font-weight: 500;
+  margin: 0 0 22px;
+  text-wrap: balance;
+}
+.portfolio-hero h1 em {
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--accent);
+  font-weight: 400;
+}
+.portfolio-hero .lede {
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  max-width: 620px;
+  margin: 0;
+  text-wrap: pretty;
+}
+.portfolio-hero .lede em {
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--ink);
+  font-size: 19px;
+}
+.portfolio-hero .meta-row {
+  margin-top: 22px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+  flex-wrap: wrap;
+}
+.portfolio-hero .meta-row .meta-sep { color: var(--ink-4); }
+.portfolio-hero .hero-kpis .v.up { color: var(--good); }
+.portfolio-hero .hero-kpis .v.dn { color: var(--bad); }
+.portfolio-hero .hero-kpis .v.small {
+  font-size: 18px;
+  letter-spacing: -0.01em;
+}
+.portfolio-hero .hero-kpis .v .tk {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink-2);
+  letter-spacing: 0.06em;
+  margin-right: 4px;
+}
+.portfolio-hero .hero-kpis .v .up { color: var(--good); }
+.portfolio-hero .hero-kpis .v .dn { color: var(--bad); }
+
+/* Generic section spacing for all portfolio sections after the hero. */
+.portfolio-currency,
+.portfolio-categories,
+.portfolio-regions,
+.portfolio-dividends,
+.portfolio-correlation {
+  padding: 40px 0 48px;
+}
+
+.sub-lede {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+  margin: -8px 0 16px;
+  text-wrap: pretty;
+}
+
+/* ————— Mini-table tweaks for portfolio (numeric alignment + ticker color) ————— */
+.mini-table th.num,
+.mini-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.mini-table td.tk {
+  color: var(--accent);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.mini-table td.muted { color: var(--ink-3); }
+.mini-table td.up { color: var(--good); }
+.mini-table td.dn { color: var(--bad); }
+.mini-table td.good { color: var(--good); }
+.mini-table td .cur {
+  color: var(--ink-4);
+  font-size: 9.5px;
+  margin-left: 4px;
+  letter-spacing: 0.06em;
+}
+
+/* ————— § 01.2 currency KPIs row ————— */
+.currency-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 14px;
+}
+.currency-kpis .ckpi {
+  border: 1px solid var(--rule);
+  background: var(--bg-1);
+  padding: 16px 18px 14px;
+}
+.currency-kpis .k {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 6px;
+}
+.currency-kpis .v {
+  font-family: var(--sans);
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.currency-kpis .v.up { color: var(--good); }
+.currency-kpis .v.dn { color: var(--bad); }
+
+/* ————— § 01.3 category cards & § 01.4 region cards (shared chrome) ————— */
+.category-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+.region-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.card {
+  background: var(--bg-2);
+  border: 1px solid var(--rule);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: relative;
+}
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  opacity: 0.45;
+}
+.card .card-head {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.card .big-num {
+  font-family: var(--mono);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.card .big-num.up { color: var(--good); }
+.card .big-num.dn { color: var(--bad); }
+.card .card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 14px;
+  border-top: 1px dashed var(--rule);
+  padding-top: 12px;
+  margin-top: auto;
+}
+.card .stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.card .stat.span-2 { grid-column: span 2; }
+.card .stat .lbl {
+  color: var(--ink-3);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.card .stat .val {
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+.card .stat .val.tk {
+  color: var(--accent);
+  font-weight: 600;
+}
+.card .stat .val.up { color: var(--good); }
+.card .stat .val.dn { color: var(--bad); }
+.card .stat.forex .val { font-size: 13px; }
+
+/* ————— § 01.5 dividend table ————— */
+.dividend-table tr.payer td { color: var(--ink-2); }
+.dividend-table tr.non-payer td {
+  color: var(--ink-4);
+  opacity: 0.7;
+}
+.dividend-table td.inr {
+  color: var(--accent);
+  font-weight: 500;
+}
+.dividend-table tr.non-payer td.inr { color: var(--ink-4); }
+
+/* ————— § 01.6 correlation grid ————— */
+.corr-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0.06em;
+  flex-wrap: wrap;
+}
+.corr-legend .lbl {
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  margin-right: 4px;
+}
+.corr-legend .swatch {
+  width: 18px;
+  height: 12px;
+  border: 1px solid var(--rule);
+  display: inline-block;
+}
+.corr-legend .rng {
+  color: var(--ink-2);
+  margin-right: 6px;
+}
+
+.corr-wrap {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.correlation-grid {
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  margin: 4px auto 6px;
+  table-layout: fixed;
+}
+.correlation-grid th,
+.correlation-grid td {
+  border: 1px solid var(--rule);
+  padding: 0;
+}
+.correlation-grid th.corner {
+  background: var(--bg-1);
+  width: 64px;
+  height: 92px;
+}
+.correlation-grid th.rot {
+  width: 44px;
+  height: 92px;
+  background: var(--bg-1);
+  vertical-align: bottom;
+}
+.correlation-grid th.rot .rot-inner {
+  display: inline-block;
+  transform: rotate(-55deg);
+  transform-origin: 50% 100%;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--ink-2);
+  white-space: nowrap;
+  padding-bottom: 6px;
+  margin-left: 2px;
+}
+.correlation-grid th.row-h {
+  background: var(--bg-1);
+  color: var(--accent);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-align: right;
+  padding: 0 10px;
+  width: 64px;
+  font-weight: 600;
+}
+.correlation-grid td {
+  width: 44px;
+  height: 32px;
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+}
+
+/* ————— Responsive ————— */
+@media (max-width: 1100px) {
+  .portfolio-hero .hero-row { grid-template-columns: 1fr; gap: 32px; }
+  .category-cards { grid-template-columns: 1fr; }
+  .region-cards { grid-template-columns: 1fr; }
+  .currency-kpis { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 720px) {
+  .correlation-grid th.rot { width: 36px; height: 80px; }
+  .correlation-grid td { width: 36px; height: 28px; font-size: 9px; }
+  .correlation-grid th.row-h { width: 52px; font-size: 9px; }
+}
