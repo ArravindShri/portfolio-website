@@ -207,23 +207,15 @@ function PricesSection() {
 
   const { products, series, unit } = useMemo(() => {
     if (!Array.isArray(data) || data.length === 0) return { products: [], series: [], unit: '' };
-    // Petroleum and Crude Oil are the same benchmark (CL ticker, identical
-    // prices) tagged differently in the warehouse. Fold Petroleum into
-    // Crude Oil so we get one clean line instead of two overlapping ones.
-    const normalize = (p) => (p === 'Petroleum' ? 'Crude Oil' : p);
-    const prods = Array.from(
-      new Set(data.map((r) => normalize(r.energy_product)).filter(Boolean)),
-    ).sort();
+    const prods = Array.from(new Set(data.map((r) => r.energy_product).filter(Boolean))).sort();
     const byPeriod = new Map();
     for (const r of data) {
       const x = r.period;
-      const p = normalize(r.energy_product);
+      const p = r.energy_product;
       const v = toNum(r.avg_monthly_price);
       if (x == null || p == null || v == null) continue;
       if (!byPeriod.has(x)) byPeriod.set(x, { period: x });
-      // First-write-wins so Crude Oil values aren't overwritten by Petroleum
-      // duplicates landing later in iteration order.
-      if (byPeriod.get(x)[p] == null) byPeriod.get(x)[p] = v;
+      byPeriod.get(x)[p] = v;
     }
     const sorted = Array.from(byPeriod.values()).sort((a, b) =>
       String(a.period) > String(b.period) ? 1 : -1,
@@ -679,46 +671,71 @@ function CountrySection() {
   const [picked, setPicked] = useState(null);
 
   // Client-side cache keyed by country_id. Stored in state (not a ref) so
-  // adding an entry triggers a re-render — otherwise switching back to a
-  // cached country wouldn't pick up the cached data, and switching from a
-  // cached country to a fresh one would briefly leak the stale `fetched`
-  // result through. Each entry: { data, source, lastUpdated }.
+  // adding an entry triggers a re-render. Each entry: { data, source,
+  // lastUpdated }.
   const [cache, setCache] = useState({});
-  const cached = picked ? cache[picked] : null;
 
-  // Only hit the network when we don't already have this country cached.
-  const path =
-    picked && !cached ? `/api/energy/country/${encodeURIComponent(picked)}` : null;
-  const fetched = useApi(path, { skip: !path });
+  // Always fetch when a country is picked — the FastAPI router has its own
+  // 1-hour cache, so repeated calls are cheap. The client cache below is
+  // purely for instant re-display and to avoid a network round-trip.
+  const path = picked ? `/api/energy/country/${encodeURIComponent(picked)}` : null;
+  const fetched = useApi(path);
 
-  // When fresh data arrives, stash it. Guard early so the effect doesn't
-  // loop forever once cache[picked] exists.
+  // useApi preserves stale state across path changes: between the click
+  // (setPicked) and the next time useApi's effect commits a `loading: true`,
+  // `fetched.data` still points at the PREVIOUS country. We tag the latest
+  // settled fetch with the picked it was for, and refuse to display fetched
+  // results until the tag matches the current pick.
+  const [fetchedFor, setFetchedFor] = useState(null);
+
   useEffect(() => {
     if (!picked) return;
-    if (cache[picked]) return;
-    if (!fetched.data) return;
-    setCache((prev) => ({
-      ...prev,
-      [picked]: {
-        data: fetched.data,
-        source: fetched.source || 'live',
-        lastUpdated: fetched.lastUpdated || new Date().toISOString(),
-      },
-    }));
-  }, [picked, cache, fetched.data, fetched.source, fetched.lastUpdated]);
+    if (fetched.loading) return; // wait for the in-flight request to settle
+    // Settled (success or error) — tag this result as belonging to `picked`.
+    setFetchedFor(picked);
+    if (!fetched.error && fetched.data && !cache[picked]) {
+      setCache((prev) => ({
+        ...prev,
+        [picked]: {
+          data: fetched.data,
+          source: fetched.source || 'live',
+          lastUpdated: fetched.lastUpdated || new Date().toISOString(),
+        },
+      }));
+    }
+  }, [
+    picked,
+    cache,
+    fetched.loading,
+    fetched.error,
+    fetched.data,
+    fetched.source,
+    fetched.lastUpdated,
+  ]);
 
-  // Effective view of fetch state — cached picks render instantly, fresh
-  // picks read straight from `fetched` so we never display the previous
-  // country's data while a new request is in flight.
-  const view = cached
+  // ---- Display selection ------------------------------------------------
+  const cachedEntry = picked ? cache[picked] : null;
+  // Fetched results are only safe to show when they correspond to the
+  // currently-picked country. Otherwise we MUST render a loading state —
+  // never the previous country's data.
+  const fetchIsForCurrentPick = fetchedFor === picked;
+  const view = cachedEntry
     ? {
-        data: cached.data,
+        data: cachedEntry.data,
         loading: false,
         error: null,
         source: 'cache',
-        lastUpdated: cached.lastUpdated,
+        lastUpdated: cachedEntry.lastUpdated,
       }
-    : fetched;
+    : fetched.loading || !fetchIsForCurrentPick
+    ? { data: null, loading: true, error: null, source: null, lastUpdated: null }
+    : {
+        data: fetched.data,
+        loading: false,
+        error: fetched.error,
+        source: fetched.source,
+        lastUpdated: fetched.lastUpdated,
+      };
   const { data, loading, error, source, lastUpdated } = view;
 
   const buckets = useMemo(() => {
