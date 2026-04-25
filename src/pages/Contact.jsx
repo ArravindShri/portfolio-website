@@ -1,27 +1,79 @@
 import { useState } from 'react';
+import { apiUrl } from '../lib/api.js';
 
 const INTENTS = ['hiring', 'collab', 'consulting', 'just-curious'];
 
 // ---------------------------------------------------------------------------
-// Terminal-styled contact form. The submit handler is a visual no-op — the
-// page is statically hosted on Vercel, so "send" just flashes a queued state.
-// Real channels live in the right-hand column.
+// Terminal-styled contact form. POSTs to /api/contact (FastAPI on Railway),
+// which forwards the message via SMTP. Status lifecycle drives both the
+// CTA label and the bottom-row dot/text.
 // ---------------------------------------------------------------------------
-function Term() {
-  const [intent, setIntent] = useState('hiring');
-  const [form, setForm] = useState({ name: '', email: '', org: '', msg: '' });
-  const [sent, setSent] = useState(false);
+const STATUS_DOT = {
+  ready: 'var(--accent)',
+  sending: 'var(--warn)',
+  sent: 'var(--good)',
+  error: 'var(--bad)',
+};
 
-  const submit = (e) => {
-    e.preventDefault();
-    setSent(true);
-    setTimeout(() => setSent(false), 4000);
+function Term() {
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    org: '',
+    intent: 'hiring',
+    message: '',
+  });
+  const [status, setStatus] = useState('ready'); // ready | sending | sent | error
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const setField = (k) => (e) =>
+    setFormData((p) => ({ ...p, [k]: e.target.value }));
+
+  const handleSubmit = async (e) => {
+    if (e?.preventDefault) e.preventDefault();
+    if (!formData.name || !formData.email || !formData.message) return;
+    setStatus('sending');
+    setErrorMsg('');
+    try {
+      const res = await fetch(apiUrl('/api/contact'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || data.message || 'Failed to send');
+      }
+      setStatus('sent');
+      setFormData({ name: '', email: '', org: '', intent: 'hiring', message: '' });
+    } catch (err) {
+      setErrorMsg(err.message || String(err));
+      setStatus('error');
+    }
   };
 
-  const composing = form.name || form.email || form.msg ? 'composing' : 'awaiting input';
+  const sending = status === 'sending';
+
+  const statusText = (() => {
+    if (status === 'sending') return 'SENDING · transmitting…';
+    if (status === 'sent')
+      return 'SENT · message delivered · response within 48h';
+    if (status === 'error') return `ERROR · ${errorMsg}`;
+    const composing =
+      formData.name || formData.email || formData.message
+        ? 'composing'
+        : 'awaiting input';
+    return `READY · ${composing} · 0 attachments · plaintext`;
+  })();
+
+  const buttonLabel = sending
+    ? '… sending'
+    : status === 'sent'
+    ? '✓ sent'
+    : 'send →';
 
   return (
-    <form className="term" onSubmit={submit}>
+    <form className="term" onSubmit={handleSubmit}>
       <div className="term-bar">
         <span className="dot live" />
         <span className="dot" />
@@ -51,8 +103,8 @@ function Term() {
             <button
               key={i}
               type="button"
-              className={intent === i ? 'on' : ''}
-              onClick={() => setIntent(i)}
+              className={formData.intent === i ? 'on' : ''}
+              onClick={() => setFormData((p) => ({ ...p, intent: i }))}
             >
               --{i}
             </button>
@@ -67,23 +119,25 @@ function Term() {
           <input
             className="term-input"
             placeholder="name ··········"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            value={formData.name}
+            onChange={setField('name')}
+            required
           />
           <input
             className="term-input"
             type="email"
             placeholder="email ·········"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            value={formData.email}
+            onChange={setField('email')}
+            required
           />
         </div>
         <div className="term-field" style={{ marginTop: 6 }}>
           <input
             className="term-input"
             placeholder="org / team (optional)"
-            value={form.org}
-            onChange={(e) => setForm({ ...form, org: e.target.value })}
+            value={formData.org}
+            onChange={setField('org')}
           />
         </div>
 
@@ -97,19 +151,25 @@ function Term() {
             placeholder={
               'the project, the role, the question — whatever brought you here.\n\n(plain text. no pitch deck required.)'
             }
-            value={form.msg}
-            onChange={(e) => setForm({ ...form, msg: e.target.value })}
+            value={formData.message}
+            onChange={setField('message')}
+            required
           />
         </div>
 
         <div className="term-cta">
-          <button type="submit">{sent ? '✓ queued' : 'send →'}</button>
+          <button type="submit" disabled={sending}>
+            {buttonLabel}
+          </button>
           <span className="help">↵ ENTER to send · response within 48h</span>
         </div>
       </div>
-      <div className="term-status">
-        <span className="dot" />
-        <span>READY · {composing} · 0 attachments · plaintext</span>
+      <div className={`term-status status-${status}`}>
+        <span
+          className="dot"
+          style={{ background: STATUS_DOT[status] }}
+        />
+        <span>{statusText}</span>
       </div>
     </form>
   );
@@ -186,13 +246,6 @@ export default function Contact() {
                     </a>
                   </span>
                   <span className="badge">code</span>
-                </div>
-                <div className="ch-row">
-                  <span className="k">Calendly</span>
-                  <span className="v">
-                    <a href="#">15-min intro · async ok</a>
-                  </span>
-                  <span className="badge">booking</span>
                 </div>
               </div>
 

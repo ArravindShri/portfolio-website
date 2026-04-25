@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse
 import cache
 from config import settings
 from database import fabric_energy, fabric_portfolio
-from routers import defense, energy, portfolio
+from routers import contact, defense, energy, portfolio
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("portfolio.api")
@@ -30,7 +30,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=list(settings.cors_origins),
     allow_credentials=True,
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["X-Data-Source", "X-Last-Updated", "X-Warehouse"],
 )
@@ -38,6 +38,7 @@ app.add_middleware(
 app.include_router(energy.router)
 app.include_router(portfolio.router)
 app.include_router(defense.router)
+app.include_router(contact.router)
 
 
 @app.exception_handler(HTTPException)
