@@ -1,0 +1,14 @@
+# Vercel hosts the Vite frontend only. The FastAPI backend lives on
+# Railway (see Dockerfile + railway.json). Excluding the Python source
+# tree and requirements.txt prevents Vercel from auto-detecting a Python
+# project and trying to `pip install pyodbc`.
+
+api/
+requirements.txt
+Dockerfile
+.dockerignore
+railway.json
+.venv/
+__pycache__/
+*.pyc
+.env.example
