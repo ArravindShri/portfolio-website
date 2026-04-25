@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Bar,
   BarChart,
@@ -207,15 +207,23 @@ function PricesSection() {
 
   const { products, series, unit } = useMemo(() => {
     if (!Array.isArray(data) || data.length === 0) return { products: [], series: [], unit: '' };
-    const prods = Array.from(new Set(data.map((r) => r.energy_product).filter(Boolean))).sort();
+    // Petroleum and Crude Oil are the same benchmark (CL ticker, identical
+    // prices) tagged differently in the warehouse. Fold Petroleum into
+    // Crude Oil so we get one clean line instead of two overlapping ones.
+    const normalize = (p) => (p === 'Petroleum' ? 'Crude Oil' : p);
+    const prods = Array.from(
+      new Set(data.map((r) => normalize(r.energy_product)).filter(Boolean)),
+    ).sort();
     const byPeriod = new Map();
     for (const r of data) {
       const x = r.period;
-      const p = r.energy_product;
+      const p = normalize(r.energy_product);
       const v = toNum(r.avg_monthly_price);
       if (x == null || p == null || v == null) continue;
       if (!byPeriod.has(x)) byPeriod.set(x, { period: x });
-      byPeriod.get(x)[p] = v;
+      // First-write-wins so Crude Oil values aren't overwritten by Petroleum
+      // duplicates landing later in iteration order.
+      if (byPeriod.get(x)[p] == null) byPeriod.get(x)[p] = v;
     }
     const sorted = Array.from(byPeriod.values()).sort((a, b) =>
       String(a.period) > String(b.period) ? 1 : -1,
@@ -414,13 +422,23 @@ function CrisisSection() {
 
   const cards = useMemo(() => {
     if (!Array.isArray(data) || data.length === 0) return [];
-    const ranked = [...data]
-      .filter((r) => isNum(r.crisis_return_pct))
-      .sort(
-        (a, b) =>
-          Math.abs(toNum(b.crisis_return_pct) ?? 0) -
-          Math.abs(toNum(a.crisis_return_pct) ?? 0),
-      );
+    // Dedupe BEFORE sorting/slicing. The gold_crisis_analysis view returns
+    // many duplicate rows per (crisis_id, ticker) — without this dedupe the
+    // top-8-by-|return| was filled entirely by 8 copies of the highest row.
+    const seen = new Set();
+    const unique = [];
+    for (const r of data) {
+      if (!isNum(r.crisis_return_pct)) continue;
+      const key = `${r.crisis_id ?? r.crisis_name ?? ''}::${r.ticker ?? ''}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(r);
+    }
+    const ranked = unique.sort(
+      (a, b) =>
+        Math.abs(toNum(b.crisis_return_pct) ?? 0) -
+        Math.abs(toNum(a.crisis_return_pct) ?? 0),
+    );
     return ranked.slice(0, 8).map((r, i) => ({
       id: `${r.crisis_id || r.crisis_name}-${r.ticker || i}`,
       crisis: r.crisis_name,
@@ -660,28 +678,38 @@ function CountrySection() {
 
   const [picked, setPicked] = useState(null);
 
-  // Client-side cache keyed by country_id. Survives picks but not page
-  // reload. Stored in a ref so reads/writes don't trigger re-renders.
-  // Each entry: { data, source, lastUpdated, cachedAt }.
-  const cacheRef = useRef({});
-  const cached = picked ? cacheRef.current[picked] : null;
+  // Client-side cache keyed by country_id. Stored in state (not a ref) so
+  // adding an entry triggers a re-render — otherwise switching back to a
+  // cached country wouldn't pick up the cached data, and switching from a
+  // cached country to a fresh one would briefly leak the stale `fetched`
+  // result through. Each entry: { data, source, lastUpdated }.
+  const [cache, setCache] = useState({});
+  const cached = picked ? cache[picked] : null;
 
   // Only hit the network when we don't already have this country cached.
   const path =
     picked && !cached ? `/api/energy/country/${encodeURIComponent(picked)}` : null;
   const fetched = useApi(path, { skip: !path });
 
-  // When fresh data arrives, stash it.
+  // When fresh data arrives, stash it. Guard early so the effect doesn't
+  // loop forever once cache[picked] exists.
   useEffect(() => {
-    if (!picked || cached || !fetched.data) return;
-    cacheRef.current[picked] = {
-      data: fetched.data,
-      source: fetched.source || 'live',
-      lastUpdated: fetched.lastUpdated || new Date().toISOString(),
-    };
-  }, [picked, cached, fetched.data, fetched.source, fetched.lastUpdated]);
+    if (!picked) return;
+    if (cache[picked]) return;
+    if (!fetched.data) return;
+    setCache((prev) => ({
+      ...prev,
+      [picked]: {
+        data: fetched.data,
+        source: fetched.source || 'live',
+        lastUpdated: fetched.lastUpdated || new Date().toISOString(),
+      },
+    }));
+  }, [picked, cache, fetched.data, fetched.source, fetched.lastUpdated]);
 
-  // Effective view of fetch state — cached picks are instantly "loaded".
+  // Effective view of fetch state — cached picks render instantly, fresh
+  // picks read straight from `fetched` so we never display the previous
+  // country's data while a new request is in flight.
   const view = cached
     ? {
         data: cached.data,
