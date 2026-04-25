@@ -1,0 +1,38 @@
+{
+  "_note": "Placeholder. Replace with the real Project 2 export when ready.",
+  "as_of": "2026-04-25",
+  "rows": [
+    {
+      "country_id": "IND",
+      "year": 2023,
+      "acled_events": 1842,
+      "fatalities": 612,
+      "spending_usd_bn": 81.4,
+      "spending_pct_gdp": 2.4
+    },
+    {
+      "country_id": "IND",
+      "year": 2024,
+      "acled_events": 1976,
+      "fatalities": 588,
+      "spending_usd_bn": 86.1,
+      "spending_pct_gdp": 2.5
+    },
+    {
+      "country_id": "KSA",
+      "year": 2023,
+      "acled_events": 312,
+      "fatalities": 88,
+      "spending_usd_bn": 75.0,
+      "spending_pct_gdp": 7.1
+    },
+    {
+      "country_id": "KSA",
+      "year": 2024,
+      "acled_events": 268,
+      "fatalities": 64,
+      "spending_usd_bn": 78.2,
+      "spending_pct_gdp": 7.3
+    }
+  ]
+}

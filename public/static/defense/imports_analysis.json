@@ -1,0 +1,38 @@
+{
+  "_note": "Placeholder. Replace with the real Project 2 export when ready.",
+  "as_of": "2026-04-25",
+  "rows": [
+    {
+      "country_id": "IND",
+      "supplier_id": "RUS",
+      "supplier_name": "Russia",
+      "value_usd_bn": 7.8,
+      "share_pct": 42.4,
+      "category": "aircraft"
+    },
+    {
+      "country_id": "IND",
+      "supplier_id": "FRA",
+      "supplier_name": "France",
+      "value_usd_bn": 4.1,
+      "share_pct": 22.3,
+      "category": "aircraft"
+    },
+    {
+      "country_id": "IND",
+      "supplier_id": "USA",
+      "supplier_name": "United States",
+      "value_usd_bn": 3.6,
+      "share_pct": 19.6,
+      "category": "naval"
+    },
+    {
+      "country_id": "KSA",
+      "supplier_id": "USA",
+      "supplier_name": "United States",
+      "value_usd_bn": 9.2,
+      "share_pct": 73.0,
+      "category": "missile"
+    }
+  ]
+}

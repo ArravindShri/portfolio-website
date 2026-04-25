@@ -1,0 +1,41 @@
+{
+  "_note": "Placeholder. Replace with the real Project 2 export when ready.",
+  "as_of": "2026-04-25",
+  "rows": [
+    {
+      "rank": 1,
+      "name": "Lockheed Martin",
+      "country_id": "USA",
+      "revenue_usd_bn": 65.4,
+      "defense_share_pct": 90
+    },
+    {
+      "rank": 2,
+      "name": "Raytheon Technologies",
+      "country_id": "USA",
+      "revenue_usd_bn": 41.2,
+      "defense_share_pct": 65
+    },
+    {
+      "rank": 3,
+      "name": "BAE Systems",
+      "country_id": "GBR",
+      "revenue_usd_bn": 27.4,
+      "defense_share_pct": 95
+    },
+    {
+      "rank": 4,
+      "name": "Northrop Grumman",
+      "country_id": "USA",
+      "revenue_usd_bn": 35.7,
+      "defense_share_pct": 90
+    },
+    {
+      "rank": 5,
+      "name": "Dassault Aviation",
+      "country_id": "FRA",
+      "revenue_usd_bn": 6.9,
+      "defense_share_pct": 70
+    }
+  ]
+}

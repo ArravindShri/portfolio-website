@@ -1,0 +1,50 @@
+{
+  "_note": "Placeholder. Replace with the real Project 2 export when ready.",
+  "as_of": "2026-04-25",
+  "rows": [
+    {
+      "exporter_id": "USA",
+      "exporter_lat": 38.9072,
+      "exporter_lng": -77.0369,
+      "importer_id": "IND",
+      "importer_lat": 28.6139,
+      "importer_lng": 77.209,
+      "strength_index": 78,
+      "value_usd_bn": 3.6,
+      "trend": "rising"
+    },
+    {
+      "exporter_id": "RUS",
+      "exporter_lat": 55.7558,
+      "exporter_lng": 37.6176,
+      "importer_id": "IND",
+      "importer_lat": 28.6139,
+      "importer_lng": 77.209,
+      "strength_index": 91,
+      "value_usd_bn": 7.8,
+      "trend": "stable"
+    },
+    {
+      "exporter_id": "FRA",
+      "exporter_lat": 48.8566,
+      "exporter_lng": 2.3522,
+      "importer_id": "IND",
+      "importer_lat": 28.6139,
+      "importer_lng": 77.209,
+      "strength_index": 84,
+      "value_usd_bn": 4.1,
+      "trend": "rising"
+    },
+    {
+      "exporter_id": "USA",
+      "exporter_lat": 38.9072,
+      "exporter_lng": -77.0369,
+      "importer_id": "KSA",
+      "importer_lat": 24.7136,
+      "importer_lng": 46.6753,
+      "strength_index": 96,
+      "value_usd_bn": 9.2,
+      "trend": "stable"
+    }
+  ]
+}

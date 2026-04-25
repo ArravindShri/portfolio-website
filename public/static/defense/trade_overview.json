@@ -1,0 +1,38 @@
+{
+  "_note": "Placeholder. Replace with the real Project 2 export when ready.",
+  "as_of": "2026-04-25",
+  "rows": [
+    {
+      "country_id": "IND",
+      "country_name": "India",
+      "imports_usd_bn": 18.4,
+      "exports_usd_bn": 2.6,
+      "trade_balance_usd_bn": -15.8,
+      "balance_pct_of_gdp": -0.45
+    },
+    {
+      "country_id": "USA",
+      "country_name": "United States",
+      "imports_usd_bn": 1.9,
+      "exports_usd_bn": 35.2,
+      "trade_balance_usd_bn": 33.3,
+      "balance_pct_of_gdp": 0.13
+    },
+    {
+      "country_id": "RUS",
+      "country_name": "Russia",
+      "imports_usd_bn": 0.6,
+      "exports_usd_bn": 14.5,
+      "trade_balance_usd_bn": 13.9,
+      "balance_pct_of_gdp": 0.74
+    },
+    {
+      "country_id": "FRA",
+      "country_name": "France",
+      "imports_usd_bn": 1.1,
+      "exports_usd_bn": 11.7,
+      "trade_balance_usd_bn": 10.6,
+      "balance_pct_of_gdp": 0.36
+    }
+  ]
+}

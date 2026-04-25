@@ -1,0 +1,46 @@
+{
+  "_note": "Placeholder. Replace with the real Project 2 export when ready.",
+  "as_of": "2026-04-25",
+  "rows": [
+    {
+      "exporter_id": "USA",
+      "exporter_name": "United States",
+      "destination_id": "KSA",
+      "destination_name": "Saudi Arabia",
+      "value_usd_bn": 9.2,
+      "category": "missile"
+    },
+    {
+      "exporter_id": "USA",
+      "exporter_name": "United States",
+      "destination_id": "IND",
+      "destination_name": "India",
+      "value_usd_bn": 3.6,
+      "category": "naval"
+    },
+    {
+      "exporter_id": "RUS",
+      "exporter_name": "Russia",
+      "destination_id": "IND",
+      "destination_name": "India",
+      "value_usd_bn": 7.8,
+      "category": "aircraft"
+    },
+    {
+      "exporter_id": "FRA",
+      "exporter_name": "France",
+      "destination_id": "IND",
+      "destination_name": "India",
+      "value_usd_bn": 4.1,
+      "category": "aircraft"
+    },
+    {
+      "exporter_id": "FRA",
+      "exporter_name": "France",
+      "destination_id": "EGY",
+      "destination_name": "Egypt",
+      "value_usd_bn": 2.3,
+      "category": "aircraft"
+    }
+  ]
+}

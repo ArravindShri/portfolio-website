@@ -1,0 +1,23 @@
+node_modules
+dist
+dist-ssr
+*.local
+.vite
+.DS_Store
+.env
+.env.local
+.vscode
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+
+# Vercel
+.vercel
+
+# Claude Code local settings
+.claude/
