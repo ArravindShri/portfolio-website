@@ -438,3 +438,59 @@
   .crisis-grid { grid-template-columns: 1fr; }
   .country-grid { grid-template-columns: 1fr; }
 }
+
+/* ————— Inline data-coverage notes (informational, not errors) ————— */
+.data-note {
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.55;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+  margin: 8px 2px 0;
+  text-wrap: pretty;
+}
+.data-note.in-cell {
+  border-top: 1px dashed var(--rule);
+  padding: 10px 14px 12px;
+  margin: 0;
+  background: var(--bg-2);
+}
+
+/* ————— § 03.7 Data notes section ————— */
+.energy-data-notes { padding: 40px 0 64px; }
+.energy-data-notes .panel-head .chip { font-family: var(--mono); }
+
+.data-notes-table table { width: 100%; }
+.data-notes-table th,
+.data-notes-table td {
+  vertical-align: top;
+  white-space: normal;
+  max-width: none;
+  line-height: 1.55;
+  padding: 9px 14px 9px 12px;
+}
+.data-notes-table tbody td { color: var(--ink-2); }
+.data-notes-table tbody td.limit {
+  color: var(--ink);
+  font-weight: 500;
+  border-left: 2px solid var(--accent);
+  padding-left: 14px;
+  white-space: nowrap;
+  width: 1%;
+}
+.data-notes-table tbody td.detail { color: var(--ink-2); }
+.data-notes-table tbody td.affected {
+  color: var(--ink-3);
+  white-space: nowrap;
+  width: 1%;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+}
+.data-notes-table tbody tr:hover td { background: rgba(255, 255, 255, 0.012); }
+
+@media (max-width: 900px) {
+  .data-notes-table tbody td.limit,
+  .data-notes-table tbody td.affected {
+    white-space: normal;
+  }
+}

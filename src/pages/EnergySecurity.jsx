@@ -284,6 +284,10 @@ function PricesSection() {
           </div>
         )}
 
+        <div className="data-note">
+          ℹ Coal &amp; Electricity excluded — no global benchmark exists (traded regionally).
+        </div>
+
         <div className="chart-frame">
           <StatePane loading={loading} error={error} empty={isEmpty}>
             <ResponsiveContainer width="100%" height={360}>
@@ -863,6 +867,11 @@ function CountrySection() {
           <div className="country-grid">
             {['overview', 'imports', 'crisis', 'stocks'].map((bucket) => {
               const rows = buckets ? buckets[bucket] : [];
+              const showCoverageNote =
+                (bucket === 'crisis' || bucket === 'stocks') &&
+                !loading &&
+                !error &&
+                (!rows || rows.length === 0);
               return (
                 <div key={bucket} className="country-cell">
                   <div className="cell-head">
@@ -876,6 +885,13 @@ function CountrySection() {
                   >
                     <CountryBucket bucket={bucket} rows={rows} />
                   </StatePane>
+                  {showCoverageNote && (
+                    <div className="data-note in-cell">
+                      ℹ China &amp; Russia: SSE/MOEX exchanges not available on
+                      current data plan. Saudi Arabia &amp; Qatar: country ETFs
+                      used as proxies.
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -966,6 +982,109 @@ function CountryBucket({ bucket, rows }) {
 }
 
 // ===========================================================================
+//  03.7 — Data notes (limitations & coverage)
+//  Static, page-local data. No fetches, no shared state, fully additive.
+// ===========================================================================
+const DATA_NOTES = [
+  {
+    limit: 'Petroleum — consumption only',
+    detail:
+      'EIA publishes consumption but not production / imports / exports for petroleum. Trade data is filed under "Crude Oil".',
+    affected: 'Overview, Country',
+  },
+  {
+    limit: 'Crude Oil — no consumption',
+    detail:
+      'Crude oil is refined before consumption. EIA tracks consumption at the petroleum level instead.',
+    affected: 'Overview, Country',
+  },
+  {
+    limit: 'Coal & Electricity — no benchmark price',
+    detail:
+      'No single global commodity benchmark exists. Both are traded regionally with widely varying pricing.',
+    affected: 'Prices',
+  },
+  {
+    limit: 'China & Russia — no stock coverage',
+    detail:
+      'SSE, HKEX, and MOEX exchanges are not available on the Twelve Data Groww plan. PetroChina ADR (PTR) was delisted in October 2022.',
+    affected: 'Crisis, Stocks, Country',
+  },
+  {
+    limit: 'Saudi Arabia & Qatar — ETF proxies',
+    detail:
+      'Tadawul and QE exchanges are blocked on the current plan. KSA and QAT country ETFs are used as proxies; KSA is roughly 70 % weighted toward Saudi Aramco.',
+    affected: 'Stocks, Country',
+  },
+  {
+    limit: 'Benchmark prices are proxies',
+    detail:
+      'WTI (crude) and Henry Hub (gas) are used as global proxies. Actual import prices vary by bilateral agreements, LNG contracts, and regional premiums.',
+    affected: 'Prices, Overview',
+  },
+  {
+    limit: 'GDP data 1–2 year lag',
+    detail:
+      'World Bank GDP is verified through 2024. IMF estimates are used for gap-fill — the gdp_data_source column distinguishes verified vs estimated rows.',
+    affected: 'Overview',
+  },
+  {
+    limit: 'Iran–Israel crisis ongoing',
+    detail:
+      'No end date set. Returns shown are crisis-to-date and will move until the crisis resolves.',
+    affected: 'Crisis, Country',
+  },
+];
+
+function DataNotesSection() {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <section className="section energy-data-notes">
+      <div className="container">
+        <SectionTag num="03.7" label="Data notes · Limitations" path="/ data / coverage.json" />
+        <div className="panel-head">
+          <h2>
+            What the data <em>doesn’t</em> cover — and why.
+          </h2>
+          <button
+            type="button"
+            className={`chip ${expanded ? 'on' : ''}`}
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+          >
+            {expanded ? 'Hide data notes' : 'Show data notes'}
+          </button>
+        </div>
+        {expanded && (
+          <div className="chart-frame">
+            <div className="mini-table data-notes-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Limitation</th>
+                    <th>Detail</th>
+                    <th>Affected sections</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {DATA_NOTES.map((row) => (
+                    <tr key={row.limit}>
+                      <td className="limit">{row.limit}</td>
+                      <td className="detail">{row.detail}</td>
+                      <td className="affected">{row.affected}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ===========================================================================
 //  Page
 // ===========================================================================
 export default function EnergySecurity() {
@@ -977,6 +1096,7 @@ export default function EnergySecurity() {
       <CrisisSection />
       <StocksSection />
       <CountrySection />
+      <DataNotesSection />
     </>
   );
 }
