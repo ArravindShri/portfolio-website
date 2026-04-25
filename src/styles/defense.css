@@ -1,0 +1,216 @@
+/* ————— Defense Intelligence deep-dive ————— */
+/*
+ * Reuses chrome from energy.css (.panel-head, .chart-frame, .filter-row,
+ * .data-badge, .pane-state, .mini-table, .hero-kpis, etc). Only adds:
+ * - hero spacing tweaks
+ * - the cause-and-consequence two-pane grid
+ * - sortable companies table (header carets, hover, > 80% accent row)
+ * - STATIC data-badge variant
+ * - a sub-panel-head for the in-hero "top 10 exporters" subhead
+ */
+
+.defense-hero {
+  padding: 48px 0 56px;
+}
+.defense-hero .hero-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 56px;
+  align-items: end;
+  margin-top: 28px;
+  margin-bottom: 36px;
+}
+.defense-hero h1 {
+  font-family: var(--sans);
+  font-size: clamp(48px, 6vw, 88px);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  font-weight: 500;
+  margin: 0 0 22px;
+  text-wrap: balance;
+}
+.defense-hero h1 em {
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--accent);
+  font-weight: 400;
+}
+.defense-hero .lede {
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  max-width: 620px;
+  margin: 0;
+  text-wrap: pretty;
+}
+.defense-hero .lede em {
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--ink);
+  font-size: 19px;
+}
+.defense-hero .meta-row {
+  margin-top: 22px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+}
+.defense-hero .meta-row .meta-sep { color: var(--ink-4); }
+
+/* ————— Generic panel padding for the rest of the deck ————— */
+.defense-imports,
+.defense-exports,
+.defense-partnerships,
+.defense-feedback,
+.defense-companies {
+  padding: 40px 0 48px;
+}
+/* Sub-section header inside the hero (the "Top 10 exporters" subhead). */
+.panel-head.sub {
+  margin-top: 8px;
+  margin-bottom: 14px;
+}
+.panel-head.sub h2 {
+  font-size: clamp(20px, 1.8vw, 24px);
+}
+
+/* ————— STATIC variant for the data badge ————— */
+.data-badge.static {
+  color: var(--accent);
+  border-color: rgba(218, 119, 86, 0.28);
+  background: rgba(218, 119, 86, 0.06);
+}
+
+/* ————— Cause & consequence two-pane grid ————— */
+.feedback-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.feedback-grid .chart-frame {
+  display: flex;
+  flex-direction: column;
+}
+.feedback-grid .chart-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0 0 10px;
+  margin: -4px 0 6px;
+  border-bottom: 1px dashed var(--rule);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.feedback-grid .chart-head .ck { color: var(--accent); font-weight: 600; }
+.feedback-grid .chart-head .cs { color: var(--ink-2); }
+
+.latest-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  margin-top: 12px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+}
+.latest-kpis > div {
+  background: var(--bg-2);
+  padding: 10px 14px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 2px 10px;
+  font-family: var(--mono);
+}
+.latest-kpis .k {
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  grid-column: 1 / 2;
+}
+.latest-kpis .v {
+  font-family: var(--sans);
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  grid-column: 1 / 2;
+  font-variant-numeric: tabular-nums;
+}
+.latest-kpis .v.accent { color: var(--accent); }
+.latest-kpis .v.good { color: var(--good); }
+.latest-kpis .y {
+  grid-column: 2 / 3;
+  grid-row: 1 / 3;
+  align-self: end;
+  font-size: 10px;
+  color: var(--ink-4);
+  letter-spacing: 0.06em;
+}
+
+/* ————— Partnerships table (denser than the country mini-table) ————— */
+.partnerships-table table { width: 100%; }
+.partnerships-table td.num,
+.partnerships-table th:nth-child(3),
+.partnerships-table th:nth-child(4),
+.partnerships-table th:nth-child(5),
+.partnerships-table th:nth-child(7) {
+  text-align: right;
+}
+.partnerships-table td:nth-child(1),
+.partnerships-table td:nth-child(2),
+.partnerships-table td:nth-child(6) {
+  white-space: nowrap;
+}
+
+/* ————— Companies table — sortable headers + 80%+ accent row ————— */
+.companies-table table { width: 100%; }
+.companies-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  white-space: nowrap;
+}
+.companies-table th.sortable:hover { color: var(--ink); }
+.companies-table th.sortable .caret {
+  margin-left: 6px;
+  color: var(--accent);
+  font-size: 9px;
+}
+.companies-table th.sorted { color: var(--ink); }
+.companies-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.companies-table th:nth-child(1),
+.companies-table th:nth-child(5),
+.companies-table th:nth-child(6),
+.companies-table th:nth-child(7) {
+  text-align: right;
+}
+
+/* > 80% arms-revenue rows — pure-play defense companies. Subtle terracotta
+ * left border + a faint background tint, in keeping with the chrome. */
+.companies-table tr.pure-arms td {
+  background: rgba(218, 119, 86, 0.05);
+}
+.companies-table tr.pure-arms td:first-child {
+  border-left: 2px solid var(--accent);
+  padding-left: 8px;
+}
+.companies-table tr:hover td { background: rgba(255, 255, 255, 0.015); }
+.companies-table tr.pure-arms:hover td {
+  background: rgba(218, 119, 86, 0.09);
+}
+
+@media (max-width: 1100px) {
+  .defense-hero .hero-row { grid-template-columns: 1fr; gap: 32px; }
+  .feedback-grid { grid-template-columns: 1fr; }
+}

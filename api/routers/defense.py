@@ -88,3 +88,18 @@ def conflict(response: Response) -> Any:
 @router.get("/companies")
 def companies(response: Response) -> Any:
     return _serve_static(response, "top100_companies.json")
+
+
+@router.get("/spending")
+def spending(response: Response) -> Any:
+    return _serve_static(response, "spending_tradeoffs.json")
+
+
+@router.get("/partnership-flow")
+def partnership_flow(response: Response) -> Any:
+    return _serve_static(response, "partnership_flow.json")
+
+
+@router.get("/partnership-strength")
+def partnership_strength(response: Response) -> Any:
+    return _serve_static(response, "partnership_strength.json")
