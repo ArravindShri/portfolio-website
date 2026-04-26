@@ -1,3 +1,11 @@
+// TICKER DATA: These values are static snapshots — not live feeds.
+// To update:
+//   1. Pull current prices from Twelve Data (or your Fabric warehouse).
+//   2. Edit the items array below.
+//   3. Push to main — Vercel auto-deploys.
+// Future improvement: fetch from /api/portfolio/stocks on mount and merge
+// with the macro symbols (BRENT, HENRY.HUB, USD/INR, ACLED.EVT, SIPRI.TIV)
+// that don't have a portfolio-API source.
 const items = [
   { sym: 'BRENT', val: '82.14', chg: '+1.8%', dir: 'up' },
   { sym: 'HENRY.HUB', val: '2.91', chg: '-0.6%', dir: 'dn' },

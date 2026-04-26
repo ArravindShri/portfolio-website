@@ -30,6 +30,7 @@ from __future__ import annotations
 import logging
 import struct
 import threading
+import time as _time
 from decimal import Decimal
 from typing import Any, Iterable, Sequence
 
@@ -38,6 +39,13 @@ import requests
 from config import settings
 
 log = logging.getLogger("fabric.db")
+
+# Silence noisy Azure / MSAL HTTP debug logs. These otherwise emit a full
+# request+response trace on every token operation, which on Railway's 1 GB
+# Docker instance accumulates into multi-MB stderr buffers and a steady
+# memory leak via the logging machinery's record retention.
+for _noisy in ("azure", "azure.identity", "azure.core.pipeline", "msal"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 
 
 # Microsoft-specific pyodbc connection attribute for AAD access tokens.
@@ -101,20 +109,36 @@ class FabricBackend:
         self.query("SELECT 1 AS ok")
 
 
+# Single shared ClientSecretCredential — both warehouses use the same SP.
+# Constructing a new one per call re-initializes the full MSAL stack (tens
+# of MB), so we lazily build one and reuse it forever.
+_credential: Any = None
+_credential_lock = threading.Lock()
+
+
+def _get_credential() -> Any:
+    global _credential
+    if _credential is None:
+        with _credential_lock:
+            if _credential is None:
+                from azure.identity import ClientSecretCredential  # noqa: PLC0415
+
+                _credential = ClientSecretCredential(
+                    tenant_id=settings.fabric_tenant_id,
+                    client_id=settings.fabric_client_id,
+                    client_secret=settings.fabric_client_secret,
+                )
+    return _credential
+
+
 def _aad_token(scope: str) -> str:
     """Acquire a Service-Principal access token for the requested scope.
 
-    Imported lazily so that import-time failures don't break the module
-    import (e.g. if azure-identity is being installed).
+    Uses the shared :func:`_get_credential` instance. The credential caches
+    token responses internally per-scope, so subsequent calls within a
+    token lifetime are essentially free.
     """
-    from azure.identity import ClientSecretCredential  # noqa: PLC0415
-
-    cred = ClientSecretCredential(
-        tenant_id=settings.fabric_tenant_id,
-        client_id=settings.fabric_client_id,
-        client_secret=settings.fabric_client_secret,
-    )
-    return cred.get_token(scope).token
+    return _get_credential().get_token(scope).token
 
 
 def _encode_token_attr(token: str) -> bytes:
@@ -127,12 +151,25 @@ def _encode_token_attr(token: str) -> bytes:
 
 
 class PyodbcTokenBackend(FabricBackend):
-    """ODBC Driver 18 + AAD access token (SQL_COPT_SS_ACCESS_TOKEN)."""
+    """ODBC Driver 18 + AAD access token (SQL_COPT_SS_ACCESS_TOKEN).
+
+    Caches a single connection between queries to avoid re-paying the cost
+    of TLS handshake + token attach on every request. The connection is
+    closed and recreated if it has been idle longer than ``_IDLE_SECONDS``
+    (Azure SQL evicts idle TDS connections server-side around the same
+    boundary, so reusing a stale one would fail anyway).
+
+    pyodbc connections are not thread-safe, so all queries through a given
+    backend instance are serialized via ``self._lock``.
+    """
 
     name = "pyodbc-token"
 
     # The token scope for SQL Server / Fabric warehouse TDS endpoints.
     _SCOPE = "https://database.windows.net/.default"
+    # Reconnect if the cached connection has been idle longer than this.
+    # 30 minutes ≈ Azure SQL gateway's typical idle timeout.
+    _IDLE_SECONDS = 1800
 
     def __init__(self, sql_endpoint: str, database: str) -> None:
         import pyodbc  # noqa: PLC0415
@@ -144,25 +181,50 @@ class PyodbcTokenBackend(FabricBackend):
             f"Database={database};"
             "Encrypt=yes;TrustServerCertificate=no;"
         )
-        # Probe once so the manager can fail-over early when ODBC isn't
-        # really usable (driver missing, network blocked, etc.).
-        with self._connect(timeout=10):
-            pass
+        # Fully lazy — no startup probe. The connection is opened on the
+        # first query() or healthcheck() call. This avoids holding an open
+        # connection (and its server-side memory) for warehouses that may
+        # never be queried during a given request lifecycle.
+        self._conn: Any = None
+        self._last_used: float = 0.0
+        self._lock = threading.Lock()
 
-    def _connect(self, timeout: int):
+    def _open(self):
         token_struct = _encode_token_attr(_aad_token(self._SCOPE))
         return self._pyodbc.connect(
             self._conn_str,
-            timeout=timeout,
+            timeout=15,
             attrs_before={_SQL_COPT_SS_ACCESS_TOKEN: token_struct},
         )
 
+    def _ensure_conn_locked(self):
+        """Return a usable connection. Caller must hold ``self._lock``."""
+        now = _time.monotonic()
+        if self._conn is not None and (now - self._last_used) > self._IDLE_SECONDS:
+            try:
+                self._conn.close()
+            except Exception:  # noqa: BLE001
+                pass
+            self._conn = None
+        if self._conn is None:
+            self._conn = self._open()
+        return self._conn
+
     def query(self, sql: str, params: Sequence[Any] | None = None) -> list[dict[str, Any]]:
-        with self._connect(timeout=15) as conn:
+        with self._lock:
+            conn = self._ensure_conn_locked()
             cur = conn.cursor()
-            cur.execute(sql, params or [])
-            cols = [c[0] for c in cur.description] if cur.description else []
-            return [_sanitize_row(dict(zip(cols, row))) for row in cur.fetchall()]
+            try:
+                cur.execute(sql, params or [])
+                cols = [c[0] for c in cur.description] if cur.description else []
+                rows = [_sanitize_row(dict(zip(cols, row))) for row in cur.fetchall()]
+            finally:
+                # Release the cursor immediately so SQL Server can reclaim
+                # its server-side resources even though we keep the
+                # connection cached for the next query.
+                cur.close()
+            self._last_used = _time.monotonic()
+            return rows
 
 
 def _sanitize_row(row: dict[str, Any]) -> dict[str, Any]:

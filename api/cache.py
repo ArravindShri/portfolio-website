@@ -10,6 +10,12 @@ from config import settings
 _lock = threading.Lock()
 _store: dict[str, dict[str, Any]] = {}
 
+# Bound the in-memory cache so query result blobs can't grow without limit.
+# When the cache is full and a new key arrives, the oldest entry by
+# insertion time is evicted (LRU-by-insertion, which is fine for our
+# workload — every endpoint refreshes every cache_ttl_seconds anyway).
+MAX_CACHE_ENTRIES = 50
+
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -44,6 +50,11 @@ def get_any(key: str) -> dict[str, Any] | None:
 def put(key: str, data: Any) -> dict[str, Any]:
     entry = {"data": data, "time": _now()}
     with _lock:
+        # Evict the oldest entry by timestamp before inserting a new key.
+        # Refreshing an existing key is free (it just replaces the value).
+        if key not in _store and len(_store) >= MAX_CACHE_ENTRIES:
+            oldest_key = min(_store, key=lambda k: _store[k]["time"])
+            _store.pop(oldest_key, None)
         _store[key] = entry
     return entry
 

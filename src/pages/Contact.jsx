@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 const INTENTS = ['hiring', 'collab', 'consulting', 'just-curious'];
 
@@ -19,6 +19,10 @@ const STATUS_DOT = {
   error: 'var(--bad)',
 };
 
+// Client-side cooldown after a successful submission. Stops the form from
+// being abused as a spam relay against the Web3Forms public access key.
+const COOLDOWN_MS = 60_000;
+
 function Term() {
   const [formData, setFormData] = useState({
     name: '',
@@ -29,6 +33,25 @@ function Term() {
   });
   const [status, setStatus] = useState('ready'); // ready | sending | sent | error
   const [errorMsg, setErrorMsg] = useState('');
+  const [cooldownUntil, setCooldownUntil] = useState(0);
+  // Tick state forces a re-render once a second during the cooldown so the
+  // status footer's countdown updates live.
+  const [, setTick] = useState(0);
+
+  // While in cooldown, increment `tick` every second. When the cooldown
+  // ends, flip status back to 'ready' so the form is usable again.
+  useEffect(() => {
+    if (cooldownUntil <= Date.now()) return undefined;
+    const id = setInterval(() => {
+      if (Date.now() >= cooldownUntil) {
+        clearInterval(id);
+        setStatus('ready');
+      } else {
+        setTick((t) => t + 1);
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [cooldownUntil]);
 
   const setField = (k) => (e) =>
     setFormData((p) => ({ ...p, [k]: e.target.value }));
@@ -63,6 +86,7 @@ function Term() {
         );
       }
       setStatus('sent');
+      setCooldownUntil(Date.now() + COOLDOWN_MS);
       setFormData({ name: '', email: '', org: '', intent: 'hiring', message: '' });
     } catch (err) {
       console.error('[contact] submission failed:', err);
@@ -71,12 +95,20 @@ function Term() {
     }
   };
 
+  const cooling = Date.now() < cooldownUntil;
+  const cooldownSeconds = cooling
+    ? Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000))
+    : 0;
   const sending = status === 'sending';
 
   const statusText = (() => {
     if (status === 'sending') return 'SENDING · transmitting…';
-    if (status === 'sent')
+    if (status === 'sent') {
+      if (cooling) {
+        return `SENT · message delivered · next submission available in ${cooldownSeconds}s`;
+      }
       return 'SENT · message delivered · response within 48h';
+    }
     if (status === 'error') return `ERROR · ${errorMsg}`;
     const composing =
       formData.name || formData.email || formData.message
@@ -177,7 +209,7 @@ function Term() {
         </div>
 
         <div className="term-cta">
-          <button type="submit" disabled={sending}>
+          <button type="submit" disabled={sending || cooling}>
             {buttonLabel}
           </button>
           <span className="help">↵ ENTER to send · response within 48h</span>

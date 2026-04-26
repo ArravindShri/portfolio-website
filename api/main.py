@@ -5,6 +5,7 @@ module from a serverless wrapper (see `api/index.py`).
 """
 from __future__ import annotations
 
+import gc
 import logging
 from typing import Any
 
@@ -39,6 +40,30 @@ app.include_router(energy.router)
 app.include_router(portfolio.router)
 app.include_router(defense.router)
 app.include_router(contact.router)
+
+
+# ---------------------------------------------------------------------------
+# Memory hygiene. Railway's 1 GB Docker instance is tight for the Azure
+# Identity + MSAL + pyodbc stack, so we (a) GC once after startup to free
+# everything that import-time leaked, and (b) GC every 100 requests to
+# defragment long-running heaps.
+# ---------------------------------------------------------------------------
+@app.on_event("startup")
+async def startup_gc() -> None:
+    gc.collect()
+
+
+_request_count = 0
+
+
+@app.middleware("http")
+async def gc_middleware(request, call_next):  # type: ignore[no-untyped-def]
+    global _request_count
+    response = await call_next(request)
+    _request_count += 1
+    if _request_count % 100 == 0:
+        gc.collect()
+    return response
 
 
 @app.exception_handler(HTTPException)

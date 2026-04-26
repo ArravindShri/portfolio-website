@@ -113,8 +113,12 @@ def country_deep_dive(country_name: str, response: Response) -> Any:
     Joins on ``country_name`` instead of ``country_id`` because the gold
     tables don't share a consistent country_id key — the overview view
     uses one numbering, but crisis/stocks use a different one. Names are
-    stable across views.
+    stable across views, so we always key on the name.
     """
+    # Defensive whitespace strip. The frontend sends names verbatim from
+    # gold_energy_overview, so casing already matches the gold tables.
+    # We deliberately do NOT title-case (would corrupt "USA", "UAE", etc.).
+    country_name = country_name.strip()
     key = cache.make_key("energy.country", {"country_name": country_name})
 
     def loader() -> dict[str, Any]:
