@@ -4,6 +4,6 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "rewrites": [
-    { "source": "/((?!assets/|static/|.*\\.(?:js|css|svg|png|jpg|jpeg|gif|ico|woff2?|ttf|map)).*)", "destination": "/index.html" }
+    { "source": "/((?!assets/|static/|.*\\.(?:js|css|svg|png|jpg|jpeg|gif|ico|woff2?|ttf|map|xml|txt|json|webmanifest)).*)", "destination": "/index.html" }
   ]
 }
