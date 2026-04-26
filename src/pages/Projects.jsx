@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import SectionTag from '../components/SectionTag.jsx';
 import ProjectCard from '../components/projects/ProjectCard.jsx';
 import MockCard from '../components/projects/MockCard.jsx';
+import SEO from '../components/SEO.jsx';
 import { heroProjects, mockProjects, domains } from '../data/projects.js';
 
 export default function Projects() {
@@ -17,6 +18,11 @@ export default function Projects() {
 
   return (
     <>
+      <SEO
+        title="Projects"
+        description="Three data engineering projects with live dashboards: Energy Security tracking 8 countries, Defense Intelligence analyzing SIPRI arms data, and a 12-stock Investment Portfolio with currency-adjusted returns."
+        path="/projects"
+      />
       <section className="projects-hero section" data-screen-label="Projects Hero">
         <div className="container">
           <SectionTag num="00" label="Projects · Index" path="/ projects / all.json" />

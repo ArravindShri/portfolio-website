@@ -14,6 +14,7 @@ import {
   YAxis,
 } from 'recharts';
 import SectionTag from '../components/SectionTag.jsx';
+import SEO from '../components/SEO.jsx';
 import useApi from '../lib/useApi.js';
 
 // ---------------------------------------------------------------------------
@@ -1125,6 +1126,11 @@ function DataNotesSection() {
 export default function EnergySecurity() {
   return (
     <>
+      <SEO
+        title="Energy Security Intelligence"
+        description="Live energy data for 8 countries — commodity prices, trade flows, crisis impact, and stock performance. Built with EIA + Twelve Data APIs, Fabric warehouse, FastAPI, and React."
+        path="/projects/energy-security"
+      />
       <HeroSection />
       <PricesSection />
       <ImportsSection />

@@ -11,6 +11,7 @@ import {
   YAxis,
 } from 'recharts';
 import SectionTag from '../components/SectionTag.jsx';
+import SEO from '../components/SEO.jsx';
 import useApi from '../lib/useApi.js';
 
 // ---------------------------------------------------------------------------
@@ -887,6 +888,11 @@ function CorrelationSection() {
 export default function InvestmentPortfolio() {
   return (
     <>
+      <SEO
+        title="Investment Portfolio Analytics"
+        description="12-stock portfolio across Nuclear, Rare Earth, Oil, and Automotive sectors. Currency-adjusted returns for an Indian investor, correlation heatmap, dividend analysis. Fabric warehouse with daily refresh."
+        path="/projects/investment-portfolio"
+      />
       <OverviewSection />
       <CurrencySection />
       <CategorySection />

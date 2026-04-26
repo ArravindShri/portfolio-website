@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import SEO from '../components/SEO.jsx';
 
 // ---------------------------------------------------------------------------
 // Three chapters of the long-form journey. Content is the source of truth;
@@ -88,6 +89,11 @@ const CHAPTERS = [
 export default function Journey() {
   return (
     <>
+      <SEO
+        title="Journey"
+        description="From Aeronautical Engineering to Data Analytics — career timeline, skill progression, certifications, and the transition from ZOHO customer success to data engineering."
+        path="/journey"
+      />
       <section className="jr-hero">
         <div className="container">
           <div className="jr-eyebrow">◆ JOURNEY · long form</div>

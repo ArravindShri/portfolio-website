@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import SEO from '../components/SEO.jsx';
 
 const INTENTS = ['hiring', 'collab', 'consulting', 'just-curious'];
 
@@ -237,6 +238,11 @@ const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 export default function Contact() {
   return (
     <>
+      <SEO
+        title="Contact"
+        description="Get in touch with Shri Arravindhar — open to full-time data/BI roles, consulting engagements, and speaking. Based in Chennai, remote-friendly."
+        path="/contact"
+      />
       <section className="ct-hero">
         <div className="container">
           <div className="ct-eyebrow">◆ CONTACT · open channels</div>

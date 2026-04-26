@@ -12,6 +12,7 @@ import {
   YAxis,
 } from 'recharts';
 import SectionTag from '../components/SectionTag.jsx';
+import SEO from '../components/SEO.jsx';
 import useApi from '../lib/useApi.js';
 
 // ---------------------------------------------------------------------------
@@ -894,6 +895,11 @@ function CompaniesSection() {
 export default function DefenseIntelligence() {
   return (
     <>
+      <SEO
+        title="Defense Intelligence"
+        description="Global defense trade analytics — SIPRI arms transfers, ACLED conflict events, spending tradeoffs, and top 100 defense companies. Medallion lakehouse architecture with 23 tables."
+        path="/projects/defense-intelligence"
+      />
       <OverviewSection />
       <ImportsSection />
       <ExportsSection />
