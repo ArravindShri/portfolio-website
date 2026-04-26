@@ -170,16 +170,17 @@ cur.execute(
 countries = [row[0] for row in cur.fetchall()]
 cur.close()
 
-# Keys mirror the bucket names produced by the previous version of this
-# script (``table.replace("gold_energy_", "").replace("gold_", "")``)
-# so downstream consumers see no shape change.
+# Keys are the bucket names the frontend's CountrySection reads:
+# data.overview / data.imports / data.crisis / data.stocks. Renaming
+# anything here breaks the country deep-dive page silently (rows simply
+# don't render), so we keep these short, stable, and exact.
 country_queries = {
     "overview": "SELECT * FROM gold_energy_overview WHERE country_name = ?",
-    "import_export_analysis": (
+    "imports": (
         "SELECT * FROM gold_import_export_analysis WHERE country_name = ?"
     ),
-    "crisis_analysis": CRISIS_DISTINCT_BY_COUNTRY,
-    "stock_performance": (
+    "crisis": CRISIS_DISTINCT_BY_COUNTRY,
+    "stocks": (
         "SELECT * FROM gold_stock_performance WHERE country_name = ?"
     ),
 }
