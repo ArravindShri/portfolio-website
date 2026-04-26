@@ -2,9 +2,6 @@ name: Export Fabric Data to Static JSON
 
 on:
   schedule:
-    # 21:45 UTC = 03:15 IST. Runs 15 minutes after the daily Fabric
-    # notebook + dbt refresh kicks off at 03:00 IST so the gold tables
-    # are settled by the time we read them.
     - cron: '45 21 * * *'
   workflow_dispatch:
 
@@ -43,12 +40,8 @@ jobs:
         run: python scripts/export_fabric_to_json.py
 
       - name: Check file sizes
-        # Hard-fail before commit if anything ballooned past 50 MB. GitHub's
-        # absolute hard limit is 100 MB per file; we trip earlier so the
-        # next time gold_crisis_analysis sprouts duplicates we notice in
-        # this step instead of when `git push` rejects the whole commit.
         run: |
-          MAX_SIZE=50000000  # 50 MB
+          MAX_SIZE=50000000
           LARGE_FILES=$(find public/static -name "*.json" -size +${MAX_SIZE}c 2>/dev/null)
           if [ -n "$LARGE_FILES" ]; then
             echo "ERROR: Files exceed 50MB limit:"
@@ -59,7 +52,7 @@ jobs:
             exit 1
           fi
 
-      - - name: Commit and push
+      - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
