@@ -354,7 +354,7 @@ const IMPORTS_PRODUCT_NOTES = {
 
 function ImportsSection() {
   const { data, loading, error, source, lastUpdated } = useApi('/api/energy/imports');
-  const [product, setProduct] = useState('Crude Oil');
+  const [product, setProduct] = useState('Coal');
 
   // Distinct energy_product list (used by the chip row).
   const products = useMemo(() => {
