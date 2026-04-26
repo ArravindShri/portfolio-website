@@ -1,0 +1,57 @@
+name: Export Fabric Data to Static JSON
+
+on:
+  schedule:
+    # 21:45 UTC = 03:15 IST. Runs 15 minutes after the daily Fabric
+    # notebook + dbt refresh kicks off at 03:00 IST so the gold tables
+    # are settled by the time we read them.
+    - cron: '45 21 * * *'
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout portfolio-website
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install ODBC Driver 18
+        run: |
+          curl https://packages.microsoft.com/keys/microsoft.asc | sudo tee /etc/apt/trusted.gpg.d/microsoft.asc
+          curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
+
+      - name: Install Python dependencies
+        run: pip install pyodbc msal
+
+      - name: Export Gold tables to JSON
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          FABRIC_SQL_ENDPOINT_P1: ${{ secrets.FABRIC_SQL_ENDPOINT_P1 }}
+          FABRIC_SQL_ENDPOINT_P3: ${{ secrets.FABRIC_SQL_ENDPOINT_P3 }}
+        run: python scripts/export_fabric_to_json.py
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/static/energy/ public/static/portfolio/ public/static/data_meta.json
+          CHANGES=$(git diff --staged --name-only)
+          if [ -z "$CHANGES" ]; then
+            echo "No data changes detected"
+          else
+            TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M UTC")
+            git commit -m "data: refresh static JSON — $TIMESTAMP"
+            git push
+          fi

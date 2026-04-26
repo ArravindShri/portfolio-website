@@ -53,7 +53,7 @@ export default function Topbar() {
                 className="dot-live"
                 style={{ display: 'inline-block', marginRight: 6, verticalAlign: 'middle' }}
               />
-              FABRIC · LIVE
+              FABRIC · DAILY
             </span>
             <span>
               {dateStr} {hh}:{mm}:{ss} UTC
