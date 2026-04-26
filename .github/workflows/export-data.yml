@@ -42,6 +42,23 @@ jobs:
           FABRIC_SQL_ENDPOINT_P3: ${{ secrets.FABRIC_SQL_ENDPOINT_P3 }}
         run: python scripts/export_fabric_to_json.py
 
+      - name: Check file sizes
+        # Hard-fail before commit if anything ballooned past 50 MB. GitHub's
+        # absolute hard limit is 100 MB per file; we trip earlier so the
+        # next time gold_crisis_analysis sprouts duplicates we notice in
+        # this step instead of when `git push` rejects the whole commit.
+        run: |
+          MAX_SIZE=50000000  # 50 MB
+          LARGE_FILES=$(find public/static -name "*.json" -size +${MAX_SIZE}c 2>/dev/null)
+          if [ -n "$LARGE_FILES" ]; then
+            echo "ERROR: Files exceed 50MB limit:"
+            echo "$LARGE_FILES" | while read f; do
+              SIZE=$(stat --printf="%s" "$f")
+              echo "  $f — $(($SIZE / 1024 / 1024))MB"
+            done
+            exit 1
+          fi
+
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"

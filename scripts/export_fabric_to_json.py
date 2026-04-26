@@ -11,6 +11,12 @@ Ubuntu runner with msodbcsql18 + pyodbc + msal installed, it:
 
 Decimal/datetime/date/bytes are coerced to JSON-friendly primitives so the
 frontend's existing toNum/isNum logic continues to work unchanged.
+
+Note: gold_crisis_analysis contains thousands of duplicate rows per
+(crisis_id, ticker) tuple. We use ``SELECT DISTINCT`` with explicit
+columns to collapse them — without this, individual country files
+exceeded GitHub's 100 MB hard limit (Australia hit 136 MB; the global
+crisis.json hit 634 MB).
 """
 from __future__ import annotations
 
@@ -75,9 +81,15 @@ def sanitize_value(val):
     return val
 
 
-def export_table(conn, table_name: str, output_path: str) -> int:
+def export_table(conn, sql: str, output_path: str) -> int:
+    """Run ``sql`` against ``conn`` and write the result set to JSON.
+
+    Renamed from "table" to reflect that the input is now a full SQL
+    statement — most callers still pass ``SELECT *`` but the crisis
+    table needs ``SELECT DISTINCT`` to drop duplicate rows.
+    """
     cur = conn.cursor()
-    cur.execute(f"SELECT * FROM {table_name}")
+    cur.execute(sql)
     cols = [d[0] for d in cur.description]
     rows = []
     for row in cur.fetchall():
@@ -88,8 +100,27 @@ def export_table(conn, table_name: str, output_path: str) -> int:
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(rows, f, separators=(",", ":"), default=str)
 
-    print(f"  {table_name} -> {output_path} ({len(rows)} rows)")
+    print(f"  -> {output_path} ({len(rows)} rows)")
     return len(rows)
+
+
+# Explicit column list used wherever we read gold_crisis_analysis. SELECT *
+# returns every duplicate row that exists in the warehouse — DISTINCT on
+# the full column tuple collapses them to one per unique fact.
+CRISIS_COLUMNS = (
+    "crisis_id, crisis_name, is_ongoing, crisis_duration_days, start_date, "
+    "ticker, company_name, country_id, asset_type, category, "
+    "pre_crisis_date, post_crisis_date, crisis_low, crisis_high, "
+    "pre_crisis_price, post_crisis_price, country_name, energy_role, "
+    "crisis_return_pct, max_drawdown_pct, has_recovered, recovery_days"
+)
+CRISIS_DISTINCT_ALL = (
+    f"SELECT DISTINCT {CRISIS_COLUMNS} FROM gold_crisis_analysis"
+)
+CRISIS_DISTINCT_BY_COUNTRY = (
+    f"SELECT DISTINCT {CRISIS_COLUMNS} "
+    "FROM gold_crisis_analysis WHERE country_name = ?"
+)
 
 
 # ----------------------------------------------------------------------------
@@ -99,17 +130,35 @@ print("Connecting to Energy warehouse (P3)...")
 p3_server = os.environ["FABRIC_SQL_ENDPOINT_P3"]
 conn_p3 = connect(p3_server, "energy_dw")
 
+# Each entry is (sql, output_path). Keys are the source-of-truth gold
+# table names (kept for legibility / log traces).
 energy_tables = {
-    "gold_energy_overview": "public/static/energy/overview.json",
-    "gold_energy_prices": "public/static/energy/prices.json",
-    "gold_import_export_analysis": "public/static/energy/imports.json",
-    "gold_crisis_analysis": "public/static/energy/crisis.json",
-    "gold_stock_performance": "public/static/energy/stocks.json",
+    "gold_energy_overview": (
+        "SELECT * FROM gold_energy_overview",
+        "public/static/energy/overview.json",
+    ),
+    "gold_energy_prices": (
+        "SELECT * FROM gold_energy_prices",
+        "public/static/energy/prices.json",
+    ),
+    "gold_import_export_analysis": (
+        "SELECT * FROM gold_import_export_analysis",
+        "public/static/energy/imports.json",
+    ),
+    "gold_crisis_analysis": (
+        CRISIS_DISTINCT_ALL,
+        "public/static/energy/crisis.json",
+    ),
+    "gold_stock_performance": (
+        "SELECT * FROM gold_stock_performance",
+        "public/static/energy/stocks.json",
+    ),
 }
 
 total_rows = 0
-for table, path in energy_tables.items():
-    total_rows += export_table(conn_p3, table, path)
+for table, (sql, path) in energy_tables.items():
+    print(f"  {table}")
+    total_rows += export_table(conn_p3, sql, path)
 
 # Per-country slices for the country deep-dive — one JSON per country
 # containing the four buckets the page reads.
@@ -121,27 +170,32 @@ cur.execute(
 countries = [row[0] for row in cur.fetchall()]
 cur.close()
 
+# Keys mirror the bucket names produced by the previous version of this
+# script (``table.replace("gold_energy_", "").replace("gold_", "")``)
+# so downstream consumers see no shape change.
+country_queries = {
+    "overview": "SELECT * FROM gold_energy_overview WHERE country_name = ?",
+    "import_export_analysis": (
+        "SELECT * FROM gold_import_export_analysis WHERE country_name = ?"
+    ),
+    "crisis_analysis": CRISIS_DISTINCT_BY_COUNTRY,
+    "stock_performance": (
+        "SELECT * FROM gold_stock_performance WHERE country_name = ?"
+    ),
+}
+
 for country in countries:
     safe_name = country.lower().replace(" ", "_")
-    country_data = {}
+    country_data: dict[str, list] = {}
 
-    for table in (
-        "gold_energy_overview",
-        "gold_import_export_analysis",
-        "gold_crisis_analysis",
-        "gold_stock_performance",
-    ):
+    for bucket, sql in country_queries.items():
         c = conn_p3.cursor()
-        c.execute(
-            f"SELECT * FROM {table} WHERE country_name = ?", country
-        )
+        c.execute(sql, country)
         cols = [d[0] for d in c.description]
         rows = []
         for row in c.fetchall():
             rows.append({col: sanitize_value(val) for col, val in zip(cols, row)})
         c.close()
-
-        bucket = table.replace("gold_energy_", "").replace("gold_", "")
         country_data[bucket] = rows
 
     out_path = f"public/static/energy/country/{safe_name}.json"
@@ -163,17 +217,36 @@ p1_server = os.environ["FABRIC_SQL_ENDPOINT_P1"]
 conn_p1 = connect(p1_server, "warehouse_investment_portfolio")
 
 portfolio_tables = {
-    "gold_stock_performance": "public/static/portfolio/stocks.json",
-    "gold_currency_adjusted_returns": "public/static/portfolio/currency_returns.json",
-    "gold_category_performance": "public/static/portfolio/categories.json",
-    "gold_region_performance": "public/static/portfolio/regions.json",
-    "gold_dividend_analysis": "public/static/portfolio/dividends.json",
-    "gold_correlation_matrix": "public/static/portfolio/correlation.json",
+    "gold_stock_performance": (
+        "SELECT * FROM gold_stock_performance",
+        "public/static/portfolio/stocks.json",
+    ),
+    "gold_currency_adjusted_returns": (
+        "SELECT * FROM gold_currency_adjusted_returns",
+        "public/static/portfolio/currency_returns.json",
+    ),
+    "gold_category_performance": (
+        "SELECT * FROM gold_category_performance",
+        "public/static/portfolio/categories.json",
+    ),
+    "gold_region_performance": (
+        "SELECT * FROM gold_region_performance",
+        "public/static/portfolio/regions.json",
+    ),
+    "gold_dividend_analysis": (
+        "SELECT * FROM gold_dividend_analysis",
+        "public/static/portfolio/dividends.json",
+    ),
+    "gold_correlation_matrix": (
+        "SELECT * FROM gold_correlation_matrix",
+        "public/static/portfolio/correlation.json",
+    ),
 }
 
 p1_rows = 0
-for table, path in portfolio_tables.items():
-    p1_rows += export_table(conn_p1, table, path)
+for table, (sql, path) in portfolio_tables.items():
+    print(f"  {table}")
+    p1_rows += export_table(conn_p1, sql, path)
 
 conn_p1.close()
 print(f"Portfolio export complete: {p1_rows} rows\n")
