@@ -59,10 +59,12 @@ jobs:
             exit 1
           fi
 
-      - name: Commit and push
+      - - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git reset --soft origin/main
           git add public/static/energy/ public/static/portfolio/ public/static/data_meta.json
           CHANGES=$(git diff --staged --name-only)
           if [ -z "$CHANGES" ]; then
@@ -70,9 +72,5 @@ jobs:
           else
             TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M UTC")
             git commit -m "data: refresh static JSON — $TIMESTAMP"
-            # Rebase onto remote main in case the runner's checkout is behind
-            # (manual commits between scheduled runs would otherwise reject
-            # this push as non-fast-forward).
-            git pull --rebase origin main
-            git push
+            git push origin main
           fi
