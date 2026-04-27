@@ -1134,6 +1134,7 @@ export default function EnergySecurity() {
       />
       <HeroSection />
       <HowItWorks
+        sectionNum="03.0"
         projectName="Energy Security"
         refreshSchedule="Daily at 3:15 AM IST"
         dataSources={['EIA API', 'Twelve Data', 'World Bank']}

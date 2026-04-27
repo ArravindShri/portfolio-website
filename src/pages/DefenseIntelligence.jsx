@@ -903,6 +903,7 @@ export default function DefenseIntelligence() {
       />
       <OverviewSection />
       <HowItWorks
+        sectionNum="02.0"
         projectName="Defense Intelligence"
         refreshSchedule="Quarterly (manual export from SIPRI + ACLED)"
         dataSources={['SIPRI Arms Transfers', 'ACLED Conflict Data']}

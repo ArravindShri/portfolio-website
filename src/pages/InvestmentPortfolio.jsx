@@ -896,6 +896,7 @@ export default function InvestmentPortfolio() {
       />
       <OverviewSection />
       <HowItWorks
+        sectionNum="01.0"
         projectName="Investment Portfolio"
         refreshSchedule="Daily at 3:15 AM IST"
         dataSources={['Twelve Data API', 'yfinance', 'World Bank']}

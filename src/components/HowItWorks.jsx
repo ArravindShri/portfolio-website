@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import SectionTag from './SectionTag.jsx';
 
 /**
  * Bloomberg-style explainer that sits below each project hero.
@@ -8,6 +9,7 @@ import { useEffect, useState } from 'react';
  * `lastUpdated` is supplied as a prop.
  */
 export default function HowItWorks({
+  sectionNum,
   projectName,
   refreshSchedule,
   dataSources = [],
@@ -61,7 +63,11 @@ export default function HowItWorks({
   return (
     <section className="section how-it-works">
       <div className="container">
-        <div className="hw-header">◆ HOW THIS WORKS · {projectName}</div>
+        <SectionTag
+          num={sectionNum}
+          label="Architecture · How it works"
+          path="/ pipeline / architecture"
+        />
 
         <p className="hw-explain">
           This is not a mockup. Every chart and table below is rendered from real data —
