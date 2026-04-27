@@ -235,6 +235,14 @@ function OverviewSection() {
               </a>
             </div>
           </div>
+          <HowItWorks
+            projectName="Defense Intelligence"
+            refreshSchedule="Quarterly (manual export from SIPRI + ACLED)"
+            dataSources={['SIPRI Arms Transfers', 'ACLED Conflict Data']}
+            pipeline="SQL Server → Medallion Architecture → 23 Gold Tables → JSON Export"
+            dashboardUrl="https://public.tableau.com/views/GlobalDefenceConflictIntelligenceAnalysis/GlobalTradeOverview?:language=en-US&:sid=&:redirect=auth&:display_count=n&:origin=viz_share_link"
+            dashboardLabel="Tableau Dashboard"
+          />
           <div className="hero-kpis">
             <div className="kpi">
               <div className="k">Countries</div>
@@ -902,16 +910,6 @@ export default function DefenseIntelligence() {
         path="/projects/defense-intelligence"
       />
       <OverviewSection />
-      <HowItWorks
-        sectionNum="02.0"
-        projectName="Defense Intelligence"
-        refreshSchedule="Quarterly (manual export from SIPRI + ACLED)"
-        dataSources={['SIPRI Arms Transfers', 'ACLED Conflict Data']}
-        pipeline="SQL Server → Medallion Architecture → 23 Gold Tables → JSON Export"
-        dashboardUrl="https://public.tableau.com/views/GlobalDefenceConflictIntelligenceAnalysis/GlobalTradeOverview?:language=en-US&:sid=&:redirect=auth&:display_count=n&:origin=viz_share_link"
-        dashboardLabel="Tableau Dashboard"
-        detailedPipeline="SIPRI Arms Transfers + ACLED Conflict Data → SQL Server (medallion architecture) → 23 Gold tables → JSON export → Static files on Vercel CDN → This page"
-      />
       <ImportsSection />
       <ExportsSection />
       <PartnershipsSection />

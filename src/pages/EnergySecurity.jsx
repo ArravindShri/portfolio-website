@@ -212,6 +212,14 @@ function HeroSection() {
               </a>
             </div>
           </div>
+          <HowItWorks
+            projectName="Energy Security"
+            refreshSchedule="Daily at 3:15 AM IST"
+            dataSources={['EIA API', 'Twelve Data', 'World Bank']}
+            pipeline="Fabric Notebooks → dbt → Gold Tables → JSON Export → Vercel CDN"
+            dashboardUrl="https://app.fabric.microsoft.com/reportEmbed?reportId=008ab23d-cf95-4b5c-aa96-8edf773a7f7d&autoAuth=true&ctid=fef10f0c-5dcc-4598-97ed-663c2bce42a5"
+            dashboardLabel="Power BI Dashboard"
+          />
           <div className="hero-kpis">
             <div className="kpi">
               <div className="k">Countries</div>
@@ -1133,16 +1141,6 @@ export default function EnergySecurity() {
         path="/projects/energy-security"
       />
       <HeroSection />
-      <HowItWorks
-        sectionNum="03.0"
-        projectName="Energy Security"
-        refreshSchedule="Daily at 3:15 AM IST"
-        dataSources={['EIA API', 'Twelve Data', 'World Bank']}
-        pipeline="Fabric Notebooks → dbt → Gold Tables → JSON Export → Vercel CDN"
-        dashboardUrl="https://app.fabric.microsoft.com/reportEmbed?reportId=008ab23d-cf95-4b5c-aa96-8edf773a7f7d&autoAuth=true&ctid=fef10f0c-5dcc-4598-97ed-663c2bce42a5"
-        dashboardLabel="Power BI Dashboard"
-        detailedPipeline="EIA + Twelve Data + World Bank → Fabric Notebooks (Bronze, 2:00 AM IST) → dbt (Silver/Gold, 3:00 AM IST) → GitHub Actions export (3:15 AM IST) → Static JSON on Vercel CDN → This page"
-      />
       <PricesSection />
       <ImportsSection />
       <CrisisSection />

@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import SectionTag from './SectionTag.jsx';
 
 /**
  * Bloomberg-style explainer that sits below each project hero.
@@ -9,7 +8,6 @@ import SectionTag from './SectionTag.jsx';
  * `lastUpdated` is supplied as a prop.
  */
 export default function HowItWorks({
-  sectionNum,
   projectName,
   refreshSchedule,
   dataSources = [],
@@ -61,14 +59,7 @@ export default function HowItWorks({
   const cadenceLabel = isDaily ? 'DAILY' : 'QUARTERLY';
 
   return (
-    <section className="section how-it-works">
-      <div className="container">
-        <SectionTag
-          num={sectionNum}
-          label="Architecture · How it works"
-          path="/ pipeline / architecture"
-        />
-
+    <div className="how-it-works-inline">
         <p className="hw-explain">
           This is not a mockup. Every chart and table below is rendered from real data —
           sourced from <strong>{sourcesText}</strong>, transformed through a medallion
@@ -120,7 +111,6 @@ export default function HowItWorks({
           {showDetail ? '▾ Hide architecture' : '▸ See the architecture'}
         </button>
         {showDetail && <div className="hw-detail">{detail}</div>}
-      </div>
-    </section>
+    </div>
   );
 }
