@@ -10,6 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import HowItWorks from '../components/HowItWorks.jsx';
 import SectionTag from '../components/SectionTag.jsx';
 import SEO from '../components/SEO.jsx';
 import useApi from '../lib/useApi.js';
@@ -894,6 +895,15 @@ export default function InvestmentPortfolio() {
         path="/projects/investment-portfolio"
       />
       <OverviewSection />
+      <HowItWorks
+        projectName="Investment Portfolio"
+        refreshSchedule="Daily at 3:15 AM IST"
+        dataSources={['Twelve Data API', 'yfinance', 'World Bank']}
+        pipeline="Fabric Notebooks → dbt → Gold Tables → JSON Export → Vercel CDN"
+        dashboardUrl="https://app.fabric.microsoft.com/reportEmbed?reportId=641cb62b-f44c-4fb5-8236-40efca0f216b&autoAuth=true&ctid=fef10f0c-5dcc-4598-97ed-663c2bce42a5"
+        dashboardLabel="Power BI Dashboard"
+        detailedPipeline="Twelve Data + yfinance → Fabric Notebooks (Bronze, 2:35 AM IST) → dbt (Silver/Gold, 3:00 AM IST) → GitHub Actions export (3:15 AM IST) → Static JSON on Vercel CDN → This page"
+      />
       <CurrencySection />
       <CategorySection />
       <RegionSection />
