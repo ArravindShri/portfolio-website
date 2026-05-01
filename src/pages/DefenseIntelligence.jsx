@@ -562,7 +562,11 @@ function S2Budgets() {
       }
     }
     const gdpRows = Array.from(latestGdpByCountry.entries())
-      .map(([label, info]) => ({ label, v: info.v }))
+      .map(([country, info]) => ({
+        // Shorten "United Arab Emirates" to "UAE" so the bar label fits.
+        label: country === 'United Arab Emirates' ? 'UAE' : country,
+        v: info.v,
+      }))
       .sort((a, b) => b.v - a.v)
       .map((r) => ({
         ...r,
@@ -670,7 +674,11 @@ function S3Conflict() {
     ]);
     const eventRows = Array.from(byCountry.entries())
       .filter(([country]) => COUNTRY_FILTER.has(country))
-      .map(([country, info]) => ({ label: country, v: info.eventsLatest, color: REGION_COLORS[info.region] || '#8A8276' }))
+      .map(([country, info]) => ({
+        label: country === 'United Arab Emirates' ? 'UAE' : country,
+        v: info.eventsLatest,
+        color: REGION_COLORS[info.region] || '#8A8276',
+      }))
       .filter((r) => r.v > 0)
       .sort((a, b) => b.v - a.v);
     return { regions: regionList, regionSeries: series, labels: years.map(String), eventCount: eventRows };
