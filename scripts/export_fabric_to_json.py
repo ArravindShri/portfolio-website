@@ -30,18 +30,21 @@ from decimal import Decimal
 import pyodbc
 from msal import ConfidentialClientApplication
 
-# Transient Fabric error markers. Both are retried; everything else
+# Transient Fabric error markers. All are retried; everything else
 # propagates immediately so we don't mask real bugs (auth, syntax,
 # missing tables).
 #
 # 3961  — Snapshot isolation conflict with a concurrent DDL (dbt rebuild
 #         touching the same table mid-export).
-# 08S01 — TCP-level "Communication link failure". Usually a paused/
-#         resuming Fabric capacity, a brief network blip from the
-#         GitHub runner, or a transient Fabric maintenance window. The
-#         connection itself succeeded; the channel died before the
-#         first query returned.
-TRANSIENT_ERROR_MARKERS = ("3961", "08S01")
+# 08S01 — TCP-level "Communication link failure". The connection itself
+#         succeeded but the channel died — usually a brief network blip
+#         or a side-effect of capacity throttling.
+# 24801 — "Your organization's Fabric compute capacity has exceeded its
+#         limits. Try again later." This is the canonical capacity-
+#         throttle error and is explicitly transient — Fabric tells you
+#         to retry. Recovery time depends on what else is using the
+#         capacity (a long dbt run can hold it down for minutes).
+TRANSIENT_ERROR_MARKERS = ("3961", "08S01", "24801")
 
 # Per-query hard cap. With Fabric on a healthy SKU each table dump finishes
 # in <2 s, so 300 s is generous. The point is to fail fast if a query is
@@ -139,7 +142,8 @@ def with_retry(fn, wh: Warehouse, *args, attempts: int = 3, **kwargs):
 
     All other pyodbc errors propagate immediately — we don't want to mask
     syntax errors, auth failures, or query timeouts. Backoff is linear
-    (30 s, 60 s, 90 s).
+    (60 s, 120 s, 180 s) — long enough for Fabric capacity throttling to
+    recover when an upstream dbt build is still consuming CUs.
     """
     last_err = None
     for i in range(attempts):
@@ -149,10 +153,13 @@ def with_retry(fn, wh: Warehouse, *args, attempts: int = 3, **kwargs):
             last_err = e
             if not _is_transient(e):
                 raise
-            if "08S01" in str(e):
+            # Channel dead OR capacity throttled — drop the connection so
+            # the next attempt opens a fresh one. Capacity throttling
+            # frequently leaves the connection in a bad state too.
+            if "08S01" in str(e) or "24801" in str(e):
                 wh.reset()
             if i < attempts - 1:
-                wait = 30 * (i + 1)
+                wait = 60 * (i + 1)
                 print(
                     f"  ! transient Fabric error: {e}; "
                     f"retry {i + 2}/{attempts} in {wait}s"
