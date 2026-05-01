@@ -790,49 +790,71 @@ function S4Partners() {
 
   const { nodes, edges, scores } = useMemo(() => {
     if (!Array.isArray(partnerships.data) || !partnerships.data.length) return { nodes: [], edges: [], scores: [] };
-    const top = partnerships.data
-      .filter((r) => isNum(r.partnership_strength) && r.supplier_country_name && r.recipient_country_name)
-      .sort((a, b) => (toNum(b.partnership_strength) || 0) - (toNum(a.partnership_strength) || 0))
-      .slice(0, 12);
 
-    const countrySet = new Set();
-    top.forEach((r) => { countrySet.add(r.supplier_country_name); countrySet.add(r.recipient_country_name); });
-    const countries = Array.from(countrySet).slice(0, 14);
+    // §02.4 is India-focused: keep India alone on the left and stack its
+    // partner countries on the right.
+    const FOCUS = 'India';
+    const indiaRows = partnerships.data
+      .filter((r) =>
+        (r.supplier_country_name === FOCUS || r.recipient_country_name === FOCUS) &&
+        isNum(r.partnership_strength) &&
+        r.supplier_country_name && r.recipient_country_name
+      )
+      .sort((a, b) => (toNum(b.partnership_strength) || 0) - (toNum(a.partnership_strength) || 0));
 
-    const supplyTotals = {};
-    for (const r of top) {
-      supplyTotals[r.supplier_country_name] = (supplyTotals[r.supplier_country_name] || 0) + (toNum(r.total_deals) || 0);
+    if (!indiaRows.length) return { nodes: [], edges: [], scores: [] };
+
+    // Aggregate per partner — pick the strongest single record but accumulate
+    // total_deals across direction (India → X and X → India both count).
+    const byPartner = new Map();
+    for (const r of indiaRows) {
+      const partner = r.supplier_country_name === FOCUS ? r.recipient_country_name : r.supplier_country_name;
+      const direction = r.supplier_country_name === FOCUS ? `${FOCUS} → ${partner}` : `${partner} → ${FOCUS}`;
+      const ps = toNum(r.partnership_strength) || 0;
+      const td = toNum(r.total_deals) || 0;
+      const cur = byPartner.get(partner);
+      if (!cur || ps > cur.strength) {
+        byPartner.set(partner, { partner, strength: ps, totalDeals: (cur?.totalDeals || 0) + td, direction });
+      } else {
+        cur.totalDeals += td;
+      }
     }
-    const sortedCountries = countries.sort((a, b) => (supplyTotals[b] || 0) - (supplyTotals[a] || 0));
 
-    const nodes = sortedCountries.map((c, i) => {
-      const isLeft = i % 2 === 0;
-      const idx = Math.floor(i / 2);
-      const slot = (idx + 0.5) / Math.ceil(sortedCountries.length / 2);
+    const partnersRanked = Array.from(byPartner.values())
+      .sort((a, b) => b.strength - a.strength)
+      .slice(0, 10);
+
+    const SHORT = (c) => (c.length > 4 ? c.slice(0, 4).toUpperCase() : c.toUpperCase());
+
+    // India: single node on the left, vertically centered.
+    const indiaNode = { id: SHORT(FOCUS), fullName: FOCUS, x: 130, y: 190, r: 18 };
+    const partnerNodes = partnersRanked.map((p, i) => {
+      const slot = (i + 0.5) / Math.max(1, partnersRanked.length);
       return {
-        id: c.length > 4 ? c.slice(0, 4).toUpperCase() : c.toUpperCase(),
-        fullName: c,
-        x: isLeft ? 130 : 770,
-        y: 50 + slot * 280,
+        id: SHORT(p.partner),
+        fullName: p.partner,
+        x: 770,
+        y: 30 + slot * 320,
         r: 16,
       };
     });
+    const nodes = [indiaNode, ...partnerNodes];
     const idByName = Object.fromEntries(nodes.map((n) => [n.fullName, n.id]));
 
-    const edges = top.map((r) => {
-      const a = idByName[r.supplier_country_name];
-      const b = idByName[r.recipient_country_name];
+    const edges = partnersRanked.map((p) => {
+      const a = idByName[FOCUS];
+      const b = idByName[p.partner];
       if (!a || !b) return null;
-      const ps = toNum(r.partnership_strength) || 0;
-      const w = Math.min(6, 1 + ps / 20);
-      const trend = ps > 60 ? 'up' : ps < 30 ? 'down' : 'steady';
-      return { a, b, w, trend, lbl: ps.toFixed(0) };
+      const w = Math.min(6, 1 + p.strength / 20);
+      const trend = p.strength > 60 ? 'up' : p.strength < 30 ? 'down' : 'steady';
+      return { a, b, w, trend, lbl: p.strength.toFixed(0) };
     }).filter(Boolean);
 
-    const scores = top.slice(0, 6).map((r) => ({
+    // Cards: India ↔ each partner with the deal count.
+    const scores = partnersRanked.map((p) => ({
       tag: 'BILATERAL',
-      pair: `${r.supplier_country_name} → ${r.recipient_country_name}`,
-      score: (toNum(r.partnership_strength) || 0).toFixed(0),
+      pair: p.direction,
+      score: fmtNum(p.totalDeals),
     }));
 
     return { nodes, edges, scores };
