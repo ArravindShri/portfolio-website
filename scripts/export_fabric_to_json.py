@@ -182,16 +182,15 @@ def sanitize_value(val):
     return val
 
 
-def _run_and_dump(conn, sql: str, output_path: str, params=None) -> int:
+def _run_and_dump(conn, sql: str, output_path: str) -> list[dict]:
+    """Run ``sql``, write rows to ``output_path``, return rows for reuse."""
     cur = conn.cursor()
-    if params is None:
-        cur.execute(sql)
-    else:
-        cur.execute(sql, params)
+    cur.execute(sql)
     cols = [d[0] for d in cur.description]
-    rows = []
-    for row in cur.fetchall():
-        rows.append({col: sanitize_value(val) for col, val in zip(cols, row)})
+    rows = [
+        {col: sanitize_value(val) for col, val in zip(cols, row)}
+        for row in cur.fetchall()
+    ]
     cur.close()
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -199,28 +198,20 @@ def _run_and_dump(conn, sql: str, output_path: str, params=None) -> int:
         json.dump(rows, f, separators=(",", ":"), default=str)
 
     print(f"  -> {output_path} ({len(rows)} rows)")
-    return len(rows)
+    return rows
 
 
-def export_table(wh: Warehouse, sql: str, output_path: str) -> int:
-    """Run ``sql`` against the warehouse and write the result set to JSON.
+def export_table(wh: Warehouse, sql: str, output_path: str) -> list[dict]:
+    """Run ``sql``, write to JSON, return the rows for in-memory reuse.
 
     Wrapped in :func:`with_retry` so transient errors (concurrent dbt
     rebuild, brief Fabric capacity blip) don't fail the whole workflow.
+    Returning rows lets the caller build derived slices (e.g. per-country
+    files for the energy deep-dive) by filtering this list instead of
+    re-querying the warehouse — eliminates ~740 per-country queries per
+    run, drops Energy_dw CU consumption ~10×.
     """
     return with_retry(_run_and_dump, wh, sql, output_path)
-
-
-def _run_query(conn, sql: str, params):
-    cur = conn.cursor()
-    cur.execute(sql, params)
-    cols = [d[0] for d in cur.description]
-    rows = [
-        {col: sanitize_value(val) for col, val in zip(cols, row)}
-        for row in cur.fetchall()
-    ]
-    cur.close()
-    return rows
 
 
 # Explicit column list used wherever we read gold_crisis_analysis. SELECT *
@@ -235,10 +226,6 @@ CRISIS_COLUMNS = (
 )
 CRISIS_DISTINCT_ALL = (
     f"SELECT DISTINCT {CRISIS_COLUMNS} FROM gold_crisis_analysis"
-)
-CRISIS_DISTINCT_BY_COUNTRY = (
-    f"SELECT DISTINCT {CRISIS_COLUMNS} "
-    "FROM gold_crisis_analysis WHERE country_name = ?"
 )
 
 
@@ -274,47 +261,47 @@ energy_tables = {
     ),
 }
 
+# Run each gold-table SELECT once, capture the rows in memory, and reuse
+# them for the per-country slices below. Previously the country deep-dive
+# was built by issuing 4 filtered queries per country × ~185 countries =
+# ~740 round-trips to Energy_dw — that single loop accounted for ~62 % of
+# all CU consumption on this Fabric capacity. Reading the full tables once
+# and filtering in Python is functionally identical (same SELECT *, same
+# DISTINCT for crisis) and ~10× cheaper.
 total_rows = 0
+energy_rows: dict[str, list[dict]] = {}
 for table, (sql, path) in energy_tables.items():
     print(f"  {table}")
-    total_rows += export_table(p3, sql, path)
+    rows = export_table(p3, sql, path)
+    energy_rows[table] = rows
+    total_rows += len(rows)
 
 # Per-country slices for the country deep-dive — one JSON per country
-# containing the four buckets the page reads.
-def _list_countries(conn):
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT DISTINCT country_name FROM gold_energy_overview "
-        "WHERE country_name IS NOT NULL"
-    )
-    rows = [row[0] for row in cur.fetchall()]
-    cur.close()
-    return rows
-
-
-countries = with_retry(_list_countries, p3)
-
-# Keys are the bucket names the frontend's CountrySection reads:
-# data.overview / data.imports / data.crisis / data.stocks. Renaming
-# anything here breaks the country deep-dive page silently (rows simply
-# don't render), so we keep these short, stable, and exact.
-country_queries = {
-    "overview": "SELECT * FROM gold_energy_overview WHERE country_name = ?",
-    "imports": (
-        "SELECT * FROM gold_import_export_analysis WHERE country_name = ?"
-    ),
-    "crisis": CRISIS_DISTINCT_BY_COUNTRY,
-    "stocks": (
-        "SELECT * FROM gold_stock_performance WHERE country_name = ?"
-    ),
+# containing the four buckets the page reads. Bucket names match what
+# the frontend's CountrySection reads (data.overview / data.imports /
+# data.crisis / data.stocks); renaming anything here breaks the page
+# silently.
+COUNTRY_BUCKET_TO_TABLE = {
+    "overview": "gold_energy_overview",
+    "imports": "gold_import_export_analysis",
+    "crisis": "gold_crisis_analysis",
+    "stocks": "gold_stock_performance",
 }
+
+countries = sorted({
+    r["country_name"]
+    for r in energy_rows["gold_energy_overview"]
+    if r.get("country_name")
+})
 
 for country in countries:
     safe_name = country.lower().replace(" ", "_")
-    country_data: dict[str, list] = {}
-
-    for bucket, sql in country_queries.items():
-        country_data[bucket] = with_retry(_run_query, p3, sql, country)
+    country_data: dict[str, list] = {
+        bucket: [
+            r for r in energy_rows[table] if r.get("country_name") == country
+        ]
+        for bucket, table in COUNTRY_BUCKET_TO_TABLE.items()
+    }
 
     out_path = f"public/static/energy/country/{safe_name}.json"
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
@@ -364,7 +351,7 @@ portfolio_tables = {
 p1_rows = 0
 for table, (sql, path) in portfolio_tables.items():
     print(f"  {table}")
-    p1_rows += export_table(p1, sql, path)
+    p1_rows += len(export_table(p1, sql, path))
 
 p1.close()
 print(f"Portfolio export complete: {p1_rows} rows\n")
