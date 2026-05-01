@@ -58,7 +58,16 @@ const ISO_NUM = {
   'Cambodia': '116', 'Laos': '418', 'Mongolia': '496', 'North Korea': '408',
   'New Zealand': '554',
 };
-const NAME_BY_ID = Object.fromEntries(Object.entries(ISO_NUM).map(([n, id]) => [id, n]));
+// Build NAME_BY_ID keeping the FIRST canonical name per ISO code so aliases
+// like 'USA', 'UK', 'UAE' don't overwrite the canonical 'United States',
+// 'United Kingdom', 'United Arab Emirates' (which is what the data uses).
+const NAME_BY_ID = (() => {
+  const m = {};
+  for (const [name, id] of Object.entries(ISO_NUM)) {
+    if (!(id in m)) m[id] = name;
+  }
+  return m;
+})();
 
 const REGION_COLORS = {
   'Europe': '#DA7756',
@@ -514,26 +523,47 @@ function S2Budgets() {
       byCountryYear.get(c).set(y, toNum(r.milex_current_usd));
     }
     const years = Array.from(yearsSet).sort((a, b) => a - b);
+    // milex_current_usd is in $ MILLIONS (SIPRI standard), not raw USD —
+    // divide by 1e3 to get billions for display.
     const series = focus
-      .filter((c) => byCountryYear.has(c))
+      .filter((c) => {
+        const m = byCountryYear.get(c);
+        if (!m) return false;
+        // Drop countries whose entire series is null (e.g., USA in this file).
+        for (const v of m.values()) if (v != null) return true;
+        return false;
+      })
       .map((c) => ({
         name: c,
         color: colors[c],
         data: years.map((y) => {
           const v = byCountryYear.get(c).get(y);
-          return v != null ? v / 1e9 : 0;
+          return v != null ? v / 1e3 : 0;
         }),
       }));
 
+    // §02.2 right chart: curated 7-country list (USA, India, Canada, Russia,
+    // Pakistan, UAE, Saudi Arabia) — sorted by GDP% so the bars are readable.
+    const GDP_FILTER = new Set([
+      'United States', 'India', 'Canada', 'Russia',
+      'Pakistan', 'United Arab Emirates', 'Saudi Arabia',
+    ]);
     const latestYear = years[years.length - 1];
-    const gdpRows = spending.data
-      .filter((r) => toNum(r.year) === latestYear && isNum(r.milex_share_gdp_pct))
-      .map((r) => ({
-        label: r.country_name,
-        v: toNum(r.milex_share_gdp_pct),
-      }))
+    // Some countries publish GDP% on a one-year lag — accept the most recent
+    // year that has a non-null value for each country in the curated set.
+    const latestGdpByCountry = new Map();
+    for (const r of spending.data) {
+      if (!GDP_FILTER.has(r.country_name)) continue;
+      if (!isNum(r.milex_share_gdp_pct)) continue;
+      const y = toNum(r.year);
+      const prev = latestGdpByCountry.get(r.country_name);
+      if (!prev || y > prev.year) {
+        latestGdpByCountry.set(r.country_name, { year: y, v: toNum(r.milex_share_gdp_pct) });
+      }
+    }
+    const gdpRows = Array.from(latestGdpByCountry.entries())
+      .map(([label, info]) => ({ label, v: info.v }))
       .sort((a, b) => b.v - a.v)
-      .slice(0, 8)
       .map((r) => ({
         ...r,
         color: r.v >= 5 ? '#C45C4A' : r.v >= 3 ? '#DA7756' : r.v >= 2 ? '#D9A441' : '#9DB17C',
@@ -633,11 +663,16 @@ function S3Conflict() {
       color: REGION_COLORS[reg] || '#8A8276',
       data: years.map((y) => byRegYear.get(reg).get(y) || 0),
     }));
+    // §02.3 right chart: curated 10-country list (matches §02.5 picker).
+    const COUNTRY_FILTER = new Set([
+      'United States', 'Canada', 'Australia', 'India', 'Pakistan',
+      'United Arab Emirates', 'Saudi Arabia', 'Japan', 'China', 'Russia',
+    ]);
     const eventRows = Array.from(byCountry.entries())
+      .filter(([country]) => COUNTRY_FILTER.has(country))
       .map(([country, info]) => ({ label: country, v: info.eventsLatest, color: REGION_COLORS[info.region] || '#8A8276' }))
       .filter((r) => r.v > 0)
-      .sort((a, b) => b.v - a.v)
-      .slice(0, 8);
+      .sort((a, b) => b.v - a.v);
     return { regions: regionList, regionSeries: series, labels: years.map(String), eventCount: eventRows };
   }, [conflict.data]);
 
@@ -855,11 +890,19 @@ function S5Country() {
   const imports = useApi('/api/defense/imports');
   const spending = useApi('/api/defense/spending');
 
+  // Curated 10-country picker list — order matters (display order).
+  const COUNTRY_PICKER = useMemo(() => [
+    'United States', 'Canada', 'Australia', 'India', 'Pakistan',
+    'United Arab Emirates', 'Saudi Arabia', 'Japan', 'China', 'Russia',
+  ], []);
+
   const countries = useMemo(() => {
-    if (!Array.isArray(overview.data)) return [];
-    const set = new Set(overview.data.map((r) => r.country_name).filter(Boolean));
-    return Array.from(set).sort();
-  }, [overview.data]);
+    if (!Array.isArray(overview.data)) return COUNTRY_PICKER;
+    // Keep curated order, but only include countries that actually appear in
+    // the overview data so we don't render a dead chip.
+    const present = new Set(overview.data.map((r) => r.country_name).filter(Boolean));
+    return COUNTRY_PICKER.filter((c) => present.has(c));
+  }, [overview.data, COUNTRY_PICKER]);
 
   const [country, setCountry] = useState('India');
   useEffect(() => {
@@ -896,7 +939,8 @@ function S5Country() {
         if (r.country_name !== country) continue;
         const y = toNum(r.year); const v = toNum(r.milex_current_usd);
         if (y == null || v == null) continue;
-        budgetByYear.set(y, v / 1e9);
+        // milex_current_usd is in $ millions — convert to billions.
+        budgetByYear.set(y, v / 1e3);
         yearsSet.add(y);
       }
     }
@@ -941,7 +985,7 @@ function S5Country() {
 
         <div className="selector-row">
           <span className="label">Country</span>
-          {countries.slice(0, 18).map((c) => (
+          {countries.map((c) => (
             <button key={c} className={`chip ${country === c ? 'on' : ''}`} onClick={() => setCountry(c)}>{c}</button>
           ))}
         </div>
@@ -1041,14 +1085,15 @@ function S6Companies() {
         .map((r) => ({
           rk: '#' + String(toNum(r.rank) ?? 0).padStart(2, '0'),
           nm: r.company_name,
-          v: '$' + fmtNum(toNum(r.arms_revenue)),
+          // arms_revenue is in $ millions — display as $ billions.
+          v: '$' + ((toNum(r.arms_revenue) ?? 0) / 1000).toFixed(1) + 'B',
         }));
       tip = {
         name: cn,
         lines: [
           { k: 'Firms', v: c.count },
           { k: 'Avg arms %', v: c.avgPct.toFixed(0) + '%' },
-          { k: 'Total arms rev', v: '$' + fmtNum(c.totalArmsRev) + 'M' },
+          { k: 'Total arms rev', v: '$' + (c.totalArmsRev / 1000).toFixed(1) + 'B' },
         ],
         sections: [{ tag: 'Firms ranked', items: firmList }],
       };
@@ -1072,7 +1117,7 @@ function S6Companies() {
             <button key={r} className={`chip ${region === r ? 'on' : ''}`} onClick={() => setRegion(r)}>{r}</button>
           ))}
           <span style={{ marginLeft: 'auto', color: '#8A8276', fontFamily: 'var(--mono)', fontSize: 10.5 }}>
-            {list.length} firms · {Object.keys(byCountry).length} countries · ${fmtNum(totalRev)}M total
+            {list.length} firms · {Object.keys(byCountry).length} countries · ${(totalRev / 1000).toFixed(1)}B total
           </span>
         </div>
 
@@ -1106,14 +1151,14 @@ function S6Companies() {
             <div className="row head">
               <div>Rank</div>
               <div>Company</div>
-              <div className="rev">Arms rev ($M)</div>
+              <div className="rev">Arms rev ($B)</div>
               <div className="pct">Arms %</div>
             </div>
             {list.slice(0, 50).map((r, i) => (
               <div key={(r.company_name || '') + i} className="row">
                 <div className="rk">#{String(toNum(r.rank) ?? '').padStart(2, '0')}</div>
                 <div className="nm">{r.company_name}<span className="sub">{r.country_name}</span></div>
-                <div className="rev">{fmtNum(toNum(r.arms_revenue))}</div>
+                <div className="rev">{isNum(r.arms_revenue) ? ((toNum(r.arms_revenue) / 1000).toFixed(1)) : '—'}</div>
                 <div className="pct">{isNum(r.arms_revenue_pct) ? toNum(r.arms_revenue_pct).toFixed(0) + '%' : '—'}</div>
               </div>
             ))}

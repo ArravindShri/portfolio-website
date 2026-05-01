@@ -47,6 +47,12 @@ export const WorldMap = ({
             <path d="M 50 0 L 0 0 0 50" fill="none"
                   stroke="rgba(218,119,86,0.05)" strokeWidth="0.5"/>
           </pattern>
+          {/* Clip the visible viewport so any path that wraps the
+              antimeridian (Russia / polar polygons) can't leak a horizontal
+              strip across the top/bottom edges. */}
+          <clipPath id="wm-viewport">
+            <rect x="0" y="30" width="1000" height="390"/>
+          </clipPath>
         </defs>
         <rect x="0" y="30" width="1000" height="390" fill="url(#wm-grid)"/>
         <line x1="0" y1="250" x2="1000" y2="250"
@@ -54,6 +60,7 @@ export const WorldMap = ({
         <line x1="500" y1="30" x2="500" y2="420"
               stroke="rgba(218,119,86,0.10)" strokeDasharray="4 6"/>
 
+        <g clipPath="url(#wm-viewport)">
         {ids.map((id) => {
           const p = paths[id];
           if (!p?.d) return null;
@@ -74,6 +81,7 @@ export const WorldMap = ({
             />
           );
         })}
+        </g>
       </svg>
     </div>
   );

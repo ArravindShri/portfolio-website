@@ -32,7 +32,12 @@ export const Panel = ({ title, meta, live, foot, children, style }) => (
 /* ─── Bar chart ─────────────────────────────── */
 export const BarChart = ({ data, h = 220, vmin = 0, vmax, refLine, showValues = true, horizontal = false }) => {
   const W = 520;
-  const PAD = { l: 40, r: 20, t: 16, b: 32 };
+  // Horizontal mode needs more horizontal room: wider left for category labels
+  // ("United States", "Saudi Arabia", "United Kingdom" …) and wider right so
+  // value labels at bar tips don't clip.
+  const PAD = horizontal
+    ? { l: 110, r: 40, t: 16, b: 32 }
+    : { l: 40, r: 20, t: 16, b: 32 };
   if (!Array.isArray(data) || data.length === 0) {
     return <div className="chart-wrap"><svg viewBox={`0 0 ${W} ${h}`} /></div>;
   }
