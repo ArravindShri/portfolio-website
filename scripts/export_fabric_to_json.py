@@ -23,11 +23,31 @@ from __future__ import annotations
 import json
 import os
 import struct
+import time
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pyodbc
 from msal import ConfidentialClientApplication
+
+# Transient Fabric error markers. Both are retried; everything else
+# propagates immediately so we don't mask real bugs (auth, syntax,
+# missing tables).
+#
+# 3961  — Snapshot isolation conflict with a concurrent DDL (dbt rebuild
+#         touching the same table mid-export).
+# 08S01 — TCP-level "Communication link failure". Usually a paused/
+#         resuming Fabric capacity, a brief network blip from the
+#         GitHub runner, or a transient Fabric maintenance window. The
+#         connection itself succeeded; the channel died before the
+#         first query returned.
+TRANSIENT_ERROR_MARKERS = ("3961", "08S01")
+
+# Per-query hard cap. With Fabric on a healthy SKU each table dump finishes
+# in <2 s, so 300 s is generous. The point is to fail fast if a query is
+# blocked behind a long DDL operation rather than hanging for 90 minutes
+# (which is what produced the 1h 38m run).
+QUERY_TIMEOUT_SECONDS = 300
 
 # ----------------------------------------------------------------------------
 # Auth — single shared token used for both warehouses.
@@ -62,9 +82,83 @@ def connect(server: str, database: str) -> pyodbc.Connection:
         "DRIVER={ODBC Driver 18 for SQL Server};"
         f"SERVER={server};DATABASE={database};"
     )
-    return pyodbc.connect(
-        conn_str, attrs_before={SQL_COPT_SS_ACCESS_TOKEN: token_struct}
+    conn = pyodbc.connect(
+        conn_str,
+        attrs_before={SQL_COPT_SS_ACCESS_TOKEN: token_struct},
+        timeout=60,  # login timeout
     )
+    # SQL_ATTR_QUERY_TIMEOUT — every cursor on this connection inherits the cap.
+    conn.timeout = QUERY_TIMEOUT_SECONDS
+    return conn
+
+
+class Warehouse:
+    """Lazy, reconnect-capable handle for a Fabric warehouse.
+
+    A 08S01 (Communication link failure) error means the channel is dead —
+    further queries on the same pyodbc.Connection will keep failing.
+    :func:`with_retry` calls :meth:`reset` on transport errors so the
+    next attempt opens a fresh connection.
+    """
+
+    def __init__(self, server: str, database: str):
+        self._server = server
+        self._database = database
+        self._conn: pyodbc.Connection | None = None
+
+    def get(self) -> pyodbc.Connection:
+        if self._conn is None:
+            self._conn = connect(self._server, self._database)
+        return self._conn
+
+    def reset(self) -> None:
+        if self._conn is not None:
+            try:
+                self._conn.close()
+            except Exception:
+                pass
+        self._conn = None
+
+    def close(self) -> None:
+        self.reset()
+
+
+def _is_transient(exc: BaseException) -> bool:
+    msg = str(exc)
+    return any(marker in msg for marker in TRANSIENT_ERROR_MARKERS)
+
+
+def with_retry(fn, wh: Warehouse, *args, attempts: int = 3, **kwargs):
+    """Run ``fn(wh.get(), *args, **kwargs)`` with retry on transient errors.
+
+    On a snapshot-isolation conflict (3961) the same connection is fine —
+    the warehouse just rebuilt a table and we wait for it to settle.
+
+    On a communication-link failure (08S01) the channel itself is dead,
+    so we drop the connection and let the next attempt reconnect.
+
+    All other pyodbc errors propagate immediately — we don't want to mask
+    syntax errors, auth failures, or query timeouts. Backoff is linear
+    (30 s, 60 s, 90 s).
+    """
+    last_err = None
+    for i in range(attempts):
+        try:
+            return fn(wh.get(), *args, **kwargs)
+        except (pyodbc.ProgrammingError, pyodbc.OperationalError) as e:
+            last_err = e
+            if not _is_transient(e):
+                raise
+            if "08S01" in str(e):
+                wh.reset()
+            if i < attempts - 1:
+                wait = 30 * (i + 1)
+                print(
+                    f"  ! transient Fabric error: {e}; "
+                    f"retry {i + 2}/{attempts} in {wait}s"
+                )
+                time.sleep(wait)
+    raise last_err
 
 
 def sanitize_value(val):
@@ -81,15 +175,12 @@ def sanitize_value(val):
     return val
 
 
-def export_table(conn, sql: str, output_path: str) -> int:
-    """Run ``sql`` against ``conn`` and write the result set to JSON.
-
-    Renamed from "table" to reflect that the input is now a full SQL
-    statement — most callers still pass ``SELECT *`` but the crisis
-    table needs ``SELECT DISTINCT`` to drop duplicate rows.
-    """
+def _run_and_dump(conn, sql: str, output_path: str, params=None) -> int:
     cur = conn.cursor()
-    cur.execute(sql)
+    if params is None:
+        cur.execute(sql)
+    else:
+        cur.execute(sql, params)
     cols = [d[0] for d in cur.description]
     rows = []
     for row in cur.fetchall():
@@ -102,6 +193,27 @@ def export_table(conn, sql: str, output_path: str) -> int:
 
     print(f"  -> {output_path} ({len(rows)} rows)")
     return len(rows)
+
+
+def export_table(wh: Warehouse, sql: str, output_path: str) -> int:
+    """Run ``sql`` against the warehouse and write the result set to JSON.
+
+    Wrapped in :func:`with_retry` so transient errors (concurrent dbt
+    rebuild, brief Fabric capacity blip) don't fail the whole workflow.
+    """
+    return with_retry(_run_and_dump, wh, sql, output_path)
+
+
+def _run_query(conn, sql: str, params):
+    cur = conn.cursor()
+    cur.execute(sql, params)
+    cols = [d[0] for d in cur.description]
+    rows = [
+        {col: sanitize_value(val) for col, val in zip(cols, row)}
+        for row in cur.fetchall()
+    ]
+    cur.close()
+    return rows
 
 
 # Explicit column list used wherever we read gold_crisis_analysis. SELECT *
@@ -128,7 +240,7 @@ CRISIS_DISTINCT_BY_COUNTRY = (
 # ----------------------------------------------------------------------------
 print("Connecting to Energy warehouse (P3)...")
 p3_server = os.environ["FABRIC_SQL_ENDPOINT_P3"]
-conn_p3 = connect(p3_server, "energy_dw")
+p3 = Warehouse(p3_server, "energy_dw")
 
 # Each entry is (sql, output_path). Keys are the source-of-truth gold
 # table names (kept for legibility / log traces).
@@ -158,17 +270,22 @@ energy_tables = {
 total_rows = 0
 for table, (sql, path) in energy_tables.items():
     print(f"  {table}")
-    total_rows += export_table(conn_p3, sql, path)
+    total_rows += export_table(p3, sql, path)
 
 # Per-country slices for the country deep-dive — one JSON per country
 # containing the four buckets the page reads.
-cur = conn_p3.cursor()
-cur.execute(
-    "SELECT DISTINCT country_name FROM gold_energy_overview "
-    "WHERE country_name IS NOT NULL"
-)
-countries = [row[0] for row in cur.fetchall()]
-cur.close()
+def _list_countries(conn):
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT DISTINCT country_name FROM gold_energy_overview "
+        "WHERE country_name IS NOT NULL"
+    )
+    rows = [row[0] for row in cur.fetchall()]
+    cur.close()
+    return rows
+
+
+countries = with_retry(_list_countries, p3)
 
 # Keys are the bucket names the frontend's CountrySection reads:
 # data.overview / data.imports / data.crisis / data.stocks. Renaming
@@ -190,14 +307,7 @@ for country in countries:
     country_data: dict[str, list] = {}
 
     for bucket, sql in country_queries.items():
-        c = conn_p3.cursor()
-        c.execute(sql, country)
-        cols = [d[0] for d in c.description]
-        rows = []
-        for row in c.fetchall():
-            rows.append({col: sanitize_value(val) for col, val in zip(cols, row)})
-        c.close()
-        country_data[bucket] = rows
+        country_data[bucket] = with_retry(_run_query, p3, sql, country)
 
     out_path = f"public/static/energy/country/{safe_name}.json"
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
@@ -207,7 +317,7 @@ for country in countries:
     total_rows += country_rows
     print(f"  country/{safe_name}.json ({country_rows} total rows)")
 
-conn_p3.close()
+p3.close()
 print(f"Energy export complete: {total_rows} rows\n")
 
 # ----------------------------------------------------------------------------
@@ -215,7 +325,7 @@ print(f"Energy export complete: {total_rows} rows\n")
 # ----------------------------------------------------------------------------
 print("Connecting to Portfolio warehouse (P1)...")
 p1_server = os.environ["FABRIC_SQL_ENDPOINT_P1"]
-conn_p1 = connect(p1_server, "warehouse_investment_portfolio")
+p1 = Warehouse(p1_server, "warehouse_investment_portfolio")
 
 portfolio_tables = {
     "gold_stock_performance": (
@@ -247,9 +357,9 @@ portfolio_tables = {
 p1_rows = 0
 for table, (sql, path) in portfolio_tables.items():
     print(f"  {table}")
-    p1_rows += export_table(conn_p1, sql, path)
+    p1_rows += export_table(p1, sql, path)
 
-conn_p1.close()
+p1.close()
 print(f"Portfolio export complete: {p1_rows} rows\n")
 
 # ----------------------------------------------------------------------------
