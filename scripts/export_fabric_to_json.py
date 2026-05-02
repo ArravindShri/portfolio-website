@@ -302,6 +302,15 @@ p3 = Warehouse(p3_server, "energy_dw")
 
 # Each entry is (sql, output_path). Keys are the source-of-truth gold
 # table names (kept for legibility / log traces).
+#
+# gold_crisis_analysis is intentionally NOT in this dict — see the
+# disk-load block below. Its server-side scan consistently exceeds 15 min
+# on Fabric F4 trial regardless of query plan (DISTINCT, plain SELECT,
+# client-side dedupe — all hit HYT00). Crisis facts are sparse events
+# (~67 in total, accumulating maybe a few times per year) so daily
+# refresh isn't necessary; we read the static crisis.json that's already
+# committed to the repo and refresh it manually from a Fabric notebook
+# whenever a new crisis lands.
 energy_tables = {
     "gold_energy_overview": (
         "SELECT * FROM gold_energy_overview",
@@ -315,10 +324,6 @@ energy_tables = {
         "SELECT * FROM gold_import_export_analysis",
         "public/static/energy/imports.json",
     ),
-    "gold_crisis_analysis": (
-        CRISIS_SELECT_ALL,
-        "public/static/energy/crisis.json",
-    ),
     "gold_stock_performance": (
         "SELECT * FROM gold_stock_performance",
         "public/static/energy/stocks.json",
@@ -330,22 +335,39 @@ energy_tables = {
 # was built by issuing 4 filtered queries per country × ~185 countries =
 # ~740 round-trips to Energy_dw — that single loop accounted for ~62 % of
 # all CU consumption on this Fabric capacity. Reading the full tables once
-# and filtering in Python is functionally identical (same SELECT *, same
-# DISTINCT for crisis) and ~10× cheaper.
+# and filtering in Python is functionally identical and ~10× cheaper.
 total_rows = 0
 energy_rows: dict[str, list[dict]] = {}
 for table, (sql, path) in energy_tables.items():
     print(f"  {table}")
-    # gold_crisis_analysis has millions of duplicate rows that only
-    # collapse to ~67 unique facts. Server-side DISTINCT exceeds the
-    # 15-minute query timeout on F4; stream the raw rows and dedupe
-    # in Python instead.
-    if table == "gold_crisis_analysis":
-        rows = export_table_dedup(p3, sql, path)
-    else:
-        rows = export_table(p3, sql, path)
+    rows = export_table(p3, sql, path)
     energy_rows[table] = rows
     total_rows += len(rows)
+
+# Load the static crisis snapshot from disk so the per-country slices can
+# include crisis data without burning 15+ minutes of Energy_dw CU on a
+# scan that consistently times out. The file is committed to the repo
+# and refreshed manually (out-of-band) when new crisis events land.
+crisis_path = "public/static/energy/crisis.json"
+print("  gold_crisis_analysis (from disk — see comment above)")
+try:
+    with open(crisis_path, "r", encoding="utf-8") as f:
+        crisis_rows = json.load(f)
+    if not isinstance(crisis_rows, list):
+        raise ValueError(
+            f"{crisis_path} did not contain a JSON array (got "
+            f"{type(crisis_rows).__name__})"
+        )
+except FileNotFoundError:
+    print(
+        f"  WARNING: {crisis_path} missing — country deep-dive will "
+        "render empty crisis buckets. Generate it manually from a "
+        "Fabric notebook (SELECT DISTINCT ... FROM gold_crisis_analysis)."
+    )
+    crisis_rows = []
+energy_rows["gold_crisis_analysis"] = crisis_rows
+total_rows += len(crisis_rows)
+print(f"  -> {crisis_path} ({len(crisis_rows)} rows from disk)")
 
 # Per-country slices for the country deep-dive — one JSON per country
 # containing the four buckets the page reads. Bucket names match what
@@ -432,7 +454,10 @@ print(f"Portfolio export complete: {p1_rows} rows\n")
 # ----------------------------------------------------------------------------
 meta = {
     "last_export": datetime.now(timezone.utc).isoformat(),
-    "energy_tables": len(energy_tables),
+    # Count what's actually represented in /static/energy/, not just what
+    # we queried from the warehouse — keeps crisis counted as a present
+    # table even though it's loaded from disk rather than re-queried.
+    "energy_tables": len(energy_rows),
     "energy_countries": len(countries),
     "portfolio_tables": len(portfolio_tables),
     "total_rows": total_rows + p1_rows,
