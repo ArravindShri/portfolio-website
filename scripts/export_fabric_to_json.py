@@ -225,9 +225,62 @@ def export_table(wh: Warehouse, sql: str, output_path: str) -> list[dict]:
     return with_retry(_run_and_dump, wh, sql, output_path)
 
 
-# Explicit column list used wherever we read gold_crisis_analysis. SELECT *
-# returns every duplicate row that exists in the warehouse — DISTINCT on
-# the full column tuple collapses them to one per unique fact.
+def _run_with_client_dedup(conn, sql: str, output_path: str) -> list[dict]:
+    """Stream rows for ``sql`` and dedupe client-side via a set of tuples.
+
+    Used for gold_crisis_analysis: the table has millions of structural
+    duplicates per (crisis_id, ticker) tuple but only ~67 truly unique
+    facts. Server-side ``SELECT DISTINCT`` consistently times out after
+    15 min on Fabric F4 trial because the sort/hash aggregate is too
+    heavy. A plain ``SELECT`` just emits rows (no sort step) and we
+    dedupe in Python via a ``set`` — memory stays bounded at ~67 tuples
+    regardless of how many raw rows arrive.
+    """
+    cur = conn.cursor()
+    cur.execute(sql)
+    cols = [d[0] for d in cur.description]
+
+    seen: set[tuple] = set()
+    raw_count = 0
+    while True:
+        batch = cur.fetchmany(50000)
+        if not batch:
+            break
+        raw_count += len(batch)
+        for row in batch:
+            seen.add(tuple(sanitize_value(val) for val in row))
+    cur.close()
+
+    rows = [dict(zip(cols, t)) for t in seen]
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(rows, f, separators=(",", ":"), default=str)
+
+    print(
+        f"  -> {output_path} "
+        f"({len(rows)} unique rows, deduped from {raw_count} raw rows)"
+    )
+    return rows
+
+
+def export_table_dedup(wh: Warehouse, sql: str, output_path: str) -> list[dict]:
+    """Like :func:`export_table` but dedupes rows in Python after fetch.
+
+    Use only for tables whose server-side DISTINCT is too heavy to
+    finish within QUERY_TIMEOUT_SECONDS — currently just
+    gold_crisis_analysis. For everything else, prefer
+    :func:`export_table` (lighter, no extra Python work).
+    """
+    return with_retry(_run_with_client_dedup, wh, sql, output_path)
+
+
+# Explicit column list used wherever we read gold_crisis_analysis. The
+# table has millions of structural duplicates per (crisis_id, ticker)
+# tuple but only ~67 truly unique facts. We used to dedupe via
+# ``SELECT DISTINCT`` in SQL, but that scan consistently exceeds 15 min
+# on Fabric F4 trial — so we now SELECT the full column list (no
+# DISTINCT) and dedupe in Python via :func:`_run_with_client_dedup`.
 CRISIS_COLUMNS = (
     "crisis_id, crisis_name, is_ongoing, crisis_duration_days, start_date, "
     "ticker, company_name, country_id, asset_type, category, "
@@ -235,8 +288,8 @@ CRISIS_COLUMNS = (
     "pre_crisis_price, post_crisis_price, country_name, energy_role, "
     "crisis_return_pct, max_drawdown_pct, has_recovered, recovery_days"
 )
-CRISIS_DISTINCT_ALL = (
-    f"SELECT DISTINCT {CRISIS_COLUMNS} FROM gold_crisis_analysis"
+CRISIS_SELECT_ALL = (
+    f"SELECT {CRISIS_COLUMNS} FROM gold_crisis_analysis"
 )
 
 
@@ -263,7 +316,7 @@ energy_tables = {
         "public/static/energy/imports.json",
     ),
     "gold_crisis_analysis": (
-        CRISIS_DISTINCT_ALL,
+        CRISIS_SELECT_ALL,
         "public/static/energy/crisis.json",
     ),
     "gold_stock_performance": (
@@ -283,7 +336,14 @@ total_rows = 0
 energy_rows: dict[str, list[dict]] = {}
 for table, (sql, path) in energy_tables.items():
     print(f"  {table}")
-    rows = export_table(p3, sql, path)
+    # gold_crisis_analysis has millions of duplicate rows that only
+    # collapse to ~67 unique facts. Server-side DISTINCT exceeds the
+    # 15-minute query timeout on F4; stream the raw rows and dedupe
+    # in Python instead.
+    if table == "gold_crisis_analysis":
+        rows = export_table_dedup(p3, sql, path)
+    else:
+        rows = export_table(p3, sql, path)
     energy_rows[table] = rows
     total_rows += len(rows)
 
