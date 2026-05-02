@@ -44,13 +44,18 @@ from msal import ConfidentialClientApplication
 #         throttle error and is explicitly transient — Fabric tells you
 #         to retry. Recovery time depends on what else is using the
 #         capacity (a long dbt run can hold it down for minutes).
-TRANSIENT_ERROR_MARKERS = ("3961", "08S01", "24801")
+# HYT00 — ODBC "Query timeout expired". The query exceeded
+#         QUERY_TIMEOUT_SECONDS. On a freshly-recovered Fabric trial, the
+#         crisis DISTINCT scan can run slow until the warehouse warms up;
+#         a retry with a fresh connection usually succeeds.
+TRANSIENT_ERROR_MARKERS = ("3961", "08S01", "24801", "HYT00")
 
-# Per-query hard cap. With Fabric on a healthy SKU each table dump finishes
-# in <2 s, so 300 s is generous. The point is to fail fast if a query is
-# blocked behind a long DDL operation rather than hanging for 90 minutes
-# (which is what produced the 1h 38m run).
-QUERY_TIMEOUT_SECONDS = 300
+# Per-query hard cap. The crisis DISTINCT scan deduplicates thousands of
+# duplicate rows down to ~67 — on a cold or smoothing-recovering Fabric
+# trial that scan can stretch past 5 minutes, so 900 s gives it enough
+# headroom while still failing fast on a runaway DDL block (which is
+# what produced the 1h 38m run).
+QUERY_TIMEOUT_SECONDS = 900
 
 # ----------------------------------------------------------------------------
 # Auth — single shared token used for both warehouses.
@@ -153,10 +158,13 @@ def with_retry(fn, wh: Warehouse, *args, attempts: int = 3, **kwargs):
             last_err = e
             if not _is_transient(e):
                 raise
-            # Channel dead OR capacity throttled — drop the connection so
-            # the next attempt opens a fresh one. Capacity throttling
-            # frequently leaves the connection in a bad state too.
-            if "08S01" in str(e) or "24801" in str(e):
+            # Channel dead, capacity throttled, or query cancelled by
+            # timeout — drop the connection so the next attempt opens a
+            # fresh one. Capacity throttling frequently leaves the
+            # connection in a bad state, and pyodbc's behavior after
+            # SQLCancel (HYT00) is also undefined.
+            err_msg = str(e)
+            if any(m in err_msg for m in ("08S01", "24801", "HYT00")):
                 wh.reset()
             if i < attempts - 1:
                 wait = 60 * (i + 1)
