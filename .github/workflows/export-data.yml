@@ -38,12 +38,18 @@ jobs:
 
       - name: Export Gold tables to JSON
         env:
+          # Force unbuffered stdout/stderr so progress prints appear in
+          # the live GitHub Actions log instead of being held in Python's
+          # 8 KB pipe buffer until the script ends. Without this, a
+          # script stuck on a slow query can look completely silent for
+          # 20+ minutes even though it's running fine.
+          PYTHONUNBUFFERED: '1'
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           FABRIC_SQL_ENDPOINT_P1: ${{ secrets.FABRIC_SQL_ENDPOINT_P1 }}
           FABRIC_SQL_ENDPOINT_P3: ${{ secrets.FABRIC_SQL_ENDPOINT_P3 }}
-        run: python scripts/export_fabric_to_json.py
+        run: python -u scripts/export_fabric_to_json.py
 
       - name: Check file sizes
         run: |

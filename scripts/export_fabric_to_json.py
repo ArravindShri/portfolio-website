@@ -60,10 +60,12 @@ QUERY_TIMEOUT_SECONDS = 900
 # ----------------------------------------------------------------------------
 # Auth — single shared token used for both warehouses.
 # ----------------------------------------------------------------------------
+print("[1/3] Reading credentials from environment...")
 client_id = os.environ["AZURE_CLIENT_ID"]
 tenant_id = os.environ["AZURE_TENANT_ID"]
 client_secret = os.environ["AZURE_CLIENT_SECRET"]
 
+print("[2/3] Acquiring AAD token from Microsoft identity platform...")
 app = ConfidentialClientApplication(
     client_id,
     authority=f"https://login.microsoftonline.com/{tenant_id}",
@@ -76,6 +78,7 @@ if "access_token" not in result:
     raise RuntimeError(
         f"Auth failed: {result.get('error_description', 'Unknown')}"
     )
+print("[3/3] Token acquired.")
 
 token = result["access_token"]
 token_bytes = token.encode("utf-16-le")
