@@ -217,7 +217,7 @@ function HeroSection() {
             refreshSchedule="Daily at 3:15 AM IST"
             dataSources={['EIA API', 'Twelve Data', 'World Bank']}
             pipeline="Fabric Notebooks → dbt → Gold Tables → JSON Export → Vercel CDN"
-            dashboardUrl="https://app.fabric.microsoft.com/reportEmbed?reportId=008ab23d-cf95-4b5c-aa96-8edf773a7f7d&autoAuth=true&ctid=fef10f0c-5dcc-4598-97ed-663c2bce42a5"
+            dashboardUrl="https://app.fabric.microsoft.com/view?r=eyJrIjoiNDMwYWUyNjItZjI0My00NjNiLWE5NzItMjBjY2U3NDUwYjIwIiwidCI6ImZlZjEwZjBjLTVkY2MtNDU5OC05N2VkLTY2M2MyYmNlNDJhNSJ9"
             dashboardLabel="Power BI Dashboard"
           />
           <div className="hero-kpis">
