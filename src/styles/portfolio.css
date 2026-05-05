@@ -77,7 +77,9 @@
 .portfolio-categories,
 .portfolio-regions,
 .portfolio-dividends,
-.portfolio-correlation {
+.portfolio-correlation,
+.portfolio-calculator,
+.portfolio-glossary {
   padding: 40px 0 48px;
 }
 
@@ -322,12 +324,351 @@
   letter-spacing: 0.02em;
 }
 
+/* ————— § 01.7 calculator ————— */
+.calc-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  gap: 16px;
+  margin-top: 6px;
+}
+.calc-inputs,
+.calc-results {
+  background: var(--bg-2);
+  border: 1px solid var(--rule);
+  padding: 22px 22px 20px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.calc-inputs::before,
+.calc-results::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  opacity: 0.45;
+}
+.calc-inputs { gap: 22px; }
+
+.calc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.calc-field .lbl {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.calc-field .lbl .val-inline {
+  color: var(--accent);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+.calc-field .hint {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+}
+
+.calc-field .input-wrap {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--rule);
+  background: var(--bg-1);
+  transition: border-color 120ms ease;
+}
+.calc-field .input-wrap:focus-within {
+  border-color: var(--accent);
+}
+.calc-field .input-wrap .prefix {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-family: var(--mono);
+  color: var(--accent);
+  font-size: 14px;
+  border-right: 1px solid var(--rule);
+}
+.calc-field .input-wrap input {
+  flex: 1;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  padding: 12px 14px;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 16px;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.calc-field .input-wrap input::-webkit-outer-spin-button,
+.calc-field .input-wrap input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.calc-field .input-wrap input[type='number'] { -moz-appearance: textfield; }
+
+.calc-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--bg-1);
+  border: 1px solid var(--rule);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  padding: 12px 36px 12px 14px;
+  cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--accent) 50%),
+    linear-gradient(135deg, var(--accent) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 12px) 50%;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  transition: border-color 120ms ease;
+}
+.calc-select:focus { outline: 0; border-color: var(--accent); }
+
+.calc-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  background: var(--rule);
+  border-radius: 0;
+  outline: 0;
+  cursor: pointer;
+}
+.calc-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+  cursor: pointer;
+}
+.calc-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+  cursor: pointer;
+}
+.slider-ticks {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--ink-4);
+  letter-spacing: 0.06em;
+  margin-top: 2px;
+}
+
+.calc-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px dashed var(--rule);
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+}
+.calc-head .lbl {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.calc-head .val {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  text-align: right;
+  justify-content: flex-end;
+}
+.calc-head .val .tk {
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--accent);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+.calc-head .val .nm {
+  font-family: var(--sans);
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.calc-rows {
+  display: flex;
+  flex-direction: column;
+}
+.calc-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 9px 0;
+  border-bottom: 1px dashed var(--rule);
+}
+.calc-row:last-child { border-bottom: 0; }
+.calc-row .r-lbl {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  letter-spacing: 0.06em;
+}
+.calc-row .r-val {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+.calc-row .r-val.up { color: var(--good); }
+.calc-row .r-val.dn { color: var(--bad); }
+.calc-row .r-val.tax { color: var(--warn); }
+.calc-row.hl {
+  margin-top: 4px;
+  padding: 12px 14px;
+  background: var(--bg-1);
+  border: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  border-left: 2px solid var(--accent);
+}
+.calc-row.hl .r-lbl {
+  color: var(--ink-2);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 10px;
+}
+.calc-row.hl .r-val.final {
+  color: var(--accent);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.calc-empty {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-3);
+  padding: 18px 0;
+  text-align: center;
+}
+.calc-foot {
+  margin-top: 14px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-4);
+  letter-spacing: 0.04em;
+  text-align: right;
+}
+
+/* ————— § 01.8 glossary ————— */
+.glossary-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--rule);
+  margin: 4px 0 16px;
+  transition: border-color 120ms ease;
+}
+.glossary-search:focus-within { border-color: var(--accent); }
+.glossary-search .prefix {
+  font-family: var(--mono);
+  color: var(--accent);
+  font-size: 14px;
+}
+.glossary-search input {
+  flex: 1;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  padding: 12px 0;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+.glossary-search input::placeholder { color: var(--ink-4); }
+.glossary-search .count {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--ink-3);
+  text-transform: uppercase;
+}
+
+.glossary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.glossary-card {
+  background: var(--bg-2);
+  border: 1px solid var(--rule);
+  padding: 16px 18px 14px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.glossary-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+  opacity: 0.45;
+}
+.glossary-card .g-term {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.glossary-card .g-def {
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+.glossary-empty {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-3);
+  padding: 24px;
+  text-align: center;
+  border: 1px dashed var(--rule);
+}
+
 /* ————— Responsive ————— */
 @media (max-width: 1100px) {
   .portfolio-hero .hero-row { grid-template-columns: 1fr; gap: 32px; }
   .category-cards { grid-template-columns: 1fr; }
   .region-cards { grid-template-columns: 1fr; }
   .currency-kpis { grid-template-columns: 1fr; }
+  .calc-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 720px) {
@@ -347,7 +688,18 @@
   .portfolio-categories,
   .portfolio-regions,
   .portfolio-dividends,
-  .portfolio-correlation { padding: 32px 0; }
+  .portfolio-correlation,
+  .portfolio-calculator,
+  .portfolio-glossary { padding: 32px 0; }
+
+  .calc-grid { grid-template-columns: 1fr; gap: 12px; }
+  .calc-inputs,
+  .calc-results { padding: 18px 16px 16px; }
+  .calc-row .r-val { font-size: 14px; }
+  .calc-row.hl .r-val.final { font-size: 18px; }
+
+  .glossary-grid { grid-template-columns: 1fr; }
+  .glossary-card { padding: 14px 14px 12px; }
 
   .panel-head { flex-direction: column; align-items: flex-start; gap: 12px; }
   .panel-head h2 { font-size: clamp(20px, 5.5vw, 26px); max-width: 100%; }
