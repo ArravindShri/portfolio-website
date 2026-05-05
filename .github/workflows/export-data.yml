@@ -8,7 +8,7 @@ on:
     # was 21:45 UTC (03:15 AM IST), which collided with a long dbt run
     # and surfaced as a snapshot-isolation DDL conflict (error 3961) on
     # gold_stock_performance.
-    - cron: '30 22 * * *'
+    - cron: '15 22 * * *'
   workflow_dispatch:
 
 jobs:
