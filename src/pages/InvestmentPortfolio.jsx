@@ -892,6 +892,200 @@ function CorrelationSection() {
 }
 
 // ===========================================================================
+//  01.7 — Investment calculator   (interactive what-if)
+// ===========================================================================
+const ALL_STOCKS_KEY = '__ALL__';
+
+// Indian numbering system (lakhs/crores) when amount ≥ 1 lakh, else commas.
+function fmtINR(n) {
+  if (n == null || !Number.isFinite(n)) return '—';
+  const sign = n < 0 ? '-' : '';
+  const abs = Math.abs(n);
+  return `${sign}₹${Intl.NumberFormat('en-IN', {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+  }).format(abs)}`;
+}
+
+function CalculatorSection() {
+  const { data, loading, error } = useApi('/api/portfolio/stocks');
+
+  const stocks = useMemo(() => {
+    if (!Array.isArray(data)) return [];
+    return data
+      .map((r) => ({
+        ticker: r.ticker,
+        name: r.company_name,
+        yoy: toNum(r.yoy_return_pct),
+      }))
+      .filter((s) => s.ticker);
+  }, [data]);
+
+  const avgYoy = useMemo(() => {
+    const nums = stocks.map((s) => s.yoy).filter((v) => v != null);
+    if (!nums.length) return null;
+    return nums.reduce((s, v) => s + v, 0) / nums.length;
+  }, [stocks]);
+
+  const [amount, setAmount] = useState(100000);
+  const [taxRate, setTaxRate] = useState(15);
+  const [selected, setSelected] = useState(ALL_STOCKS_KEY);
+
+  // Derived calculations.
+  const calc = useMemo(() => {
+    const stock =
+      selected === ALL_STOCKS_KEY
+        ? { ticker: 'ALL', name: 'All Stocks (Average)', yoy: avgYoy }
+        : stocks.find((s) => s.ticker === selected) || null;
+    const yoy = stock?.yoy;
+    if (yoy == null || !Number.isFinite(amount) || amount <= 0) {
+      return { stock, yoy, gross: 0, tax: 0, net: 0, final: amount || 0, eff: 0 };
+    }
+    const gross = amount * (yoy / 100);
+    const tax = gross > 0 ? gross * (taxRate / 100) : 0;
+    const net = gross - tax;
+    const final = amount + net;
+    const eff = (net / amount) * 100;
+    return { stock, yoy, gross, tax, net, final, eff };
+  }, [amount, taxRate, selected, stocks, avgYoy]);
+
+  const isEmpty = !loading && !error && stocks.length === 0;
+  const noData = calc.stock != null && calc.yoy == null;
+
+  return (
+    <section className="section portfolio-calculator">
+      <div className="container">
+        <SectionTag num="01.7" label="Calculator · What-if" path="/ tools / investment-calculator" />
+        <div className="panel-head">
+          <h2>
+            What if you <em>invested</em> today — gross, tax, net.
+          </h2>
+        </div>
+        <p className="sub-lede">
+          Live YoY returns from the warehouse · INR · taxes only on gains.
+        </p>
+
+        <StatePane loading={loading} error={error} empty={isEmpty}>
+          <div className="calc-grid">
+            <div className="calc-inputs">
+              <label className="calc-field">
+                <span className="lbl">Investment amount</span>
+                <div className="input-wrap">
+                  <span className="prefix">₹</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    step={1000}
+                    value={amount}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      setAmount(Number.isFinite(v) && v >= 0 ? v : 0);
+                    }}
+                  />
+                </div>
+                <span className="hint">{fmtINR(amount)}</span>
+              </label>
+
+              <label className="calc-field">
+                <span className="lbl">
+                  Tax rate · <span className="val-inline">{taxRate}%</span>
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={50}
+                  step={0.5}
+                  value={taxRate}
+                  onChange={(e) => setTaxRate(parseFloat(e.target.value))}
+                  className="calc-slider"
+                />
+                <div className="slider-ticks">
+                  <span>0%</span>
+                  <span>15%</span>
+                  <span>30%</span>
+                  <span>50%</span>
+                </div>
+              </label>
+
+              <label className="calc-field">
+                <span className="lbl">Stock</span>
+                <select
+                  value={selected}
+                  onChange={(e) => setSelected(e.target.value)}
+                  className="calc-select"
+                >
+                  <option value={ALL_STOCKS_KEY}>All Stocks (Average)</option>
+                  {stocks.map((s) => (
+                    <option key={s.ticker} value={s.ticker}>
+                      {s.ticker} · {s.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="calc-results">
+              <div className="calc-head">
+                <span className="lbl">Selection</span>
+                <span className="val">
+                  <span className="tk">{calc.stock?.ticker || '—'}</span>
+                  <span className="nm">{calc.stock?.name || ''}</span>
+                </span>
+              </div>
+
+              {noData ? (
+                <div className="calc-empty">Data not available for this stock.</div>
+              ) : (
+                <div className="calc-rows">
+                  <div className="calc-row">
+                    <span className="r-lbl">YoY return</span>
+                    <span className={`r-val ${calc.yoy >= 0 ? 'up' : 'dn'}`}>
+                      {fmtPct(calc.yoy)}
+                    </span>
+                  </div>
+                  <div className="calc-row">
+                    <span className="r-lbl">Gross return</span>
+                    <span className={`r-val ${calc.gross >= 0 ? 'up' : 'dn'}`}>
+                      {fmtINR(calc.gross)}
+                    </span>
+                  </div>
+                  <div className="calc-row">
+                    <span className="r-lbl">Tax ({taxRate}%)</span>
+                    <span className="r-val tax">
+                      {calc.tax > 0 ? `− ${fmtINR(calc.tax)}` : fmtINR(0)}
+                    </span>
+                  </div>
+                  <div className="calc-row">
+                    <span className="r-lbl">Net return</span>
+                    <span className={`r-val ${calc.net >= 0 ? 'up' : 'dn'}`}>
+                      {fmtINR(calc.net)}
+                    </span>
+                  </div>
+                  <div className="calc-row hl">
+                    <span className="r-lbl">Final value</span>
+                    <span className="r-val final">{fmtINR(calc.final)}</span>
+                  </div>
+                  <div className="calc-row">
+                    <span className="r-lbl">Effective return</span>
+                    <span className={`r-val ${calc.eff >= 0 ? 'up' : 'dn'}`}>
+                      {fmtPct(calc.eff)}
+                    </span>
+                  </div>
+                </div>
+              )}
+              <div className="calc-foot">
+                Tax applied on gains only · Negative returns incur no tax · Live data
+              </div>
+            </div>
+          </div>
+        </StatePane>
+      </div>
+    </section>
+  );
+}
+
+// ===========================================================================
 //  Page
 // ===========================================================================
 export default function InvestmentPortfolio() {
@@ -908,6 +1102,7 @@ export default function InvestmentPortfolio() {
       <RegionSection />
       <DividendSection />
       <CorrelationSection />
+      <CalculatorSection />
     </>
   );
 }
