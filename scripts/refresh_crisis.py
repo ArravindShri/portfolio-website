@@ -2,11 +2,10 @@
 
 Standalone weekly job. Decoupled from the main daily export workflow
 (scripts/export_fabric_to_json.py + .github/workflows/export-data.yml)
-because gold_crisis_analysis is materialized as a VIEW in the dbt
-project, not a table. Querying the view triggers a 6-join CROSS JOIN
-cascade that consistently runs 15+ minutes on Fabric F4 trial — too
-long for the 04:00 IST daily workflow, but fine for a separate weekly
-job that can wait.
+because gold_crisis_analysis was originally materialized as a VIEW that
+took 15-30 minutes to query. After the May 2026 deduplication fix
+(bronze mode("append") → mode("overwrite")), the query now returns ~75
+rows in under a second.
 
 Why bother refreshing at all (vs. snapshotting once and forgetting):
 
@@ -44,11 +43,10 @@ from decimal import Decimal
 import pyodbc
 from msal import ConfidentialClientApplication
 
-# 60-minute query timeout. The view executes a 6-join CROSS JOIN cascade
-# that takes 15-30 minutes on F4 trial. The daily export workflow caps
-# its queries at 15 min — fine for materialized tables but insufficient
-# for this view. Here we have all the time we need.
-QUERY_TIMEOUT_SECONDS = 3600
+# 5-minute query timeout. After the May 2026 deduplication fix, the
+# query returns ~75 rows in under a second. If it takes longer than
+# 5 minutes, something is wrong — fail fast rather than burn CUs.
+QUERY_TIMEOUT_SECONDS = 300
 
 # Explicit column list matching CRISIS_COLUMNS in export_fabric_to_json.py.
 # Keeps the JSON shape stable between manual snapshots and weekly refreshes.
@@ -110,8 +108,7 @@ def main() -> None:
         "gold_crisis_analysis..."
     )
     print(
-        f"      (typically takes 15-30 min on F4 trial; query timeout "
-        f"is {QUERY_TIMEOUT_SECONDS}s)"
+        f"      (query timeout is {QUERY_TIMEOUT_SECONDS}s)"
     )
     conn_str = (
         "DRIVER={ODBC Driver 18 for SQL Server};"
@@ -126,13 +123,24 @@ def main() -> None:
 
     started = time.time()
     cur = conn.cursor()
-    cur.execute(CRISIS_QUERY)
+    try:
+        cur.execute(CRISIS_QUERY)
+    except pyodbc.Error as e:
+        error_msg = str(e)
+        if '24801' in error_msg:
+            print("ERROR: Fabric capacity throttled (error 24801). Exiting early to preserve CUs.")
+            conn.close()
+            raise SystemExit(1)
+        elif 'HYT00' in error_msg:
+            print("ERROR: Query timed out (HYT00). Exiting early.")
+            conn.close()
+            raise SystemExit(1)
+        else:
+            raise
     cols = [d[0] for d in cur.description]
 
-    # The view's final SELECT (final_calc CTE) already returns deduped
-    # rows, but we dedupe defensively client-side via a set of sanitized
-    # tuples — bounded memory at ~67 tuples regardless of upstream
-    # behavior, and matches the export script's safety net.
+    # Dedupe defensively client-side via a set of sanitized tuples —
+    # bounded memory at ~75 tuples, matches the export script's safety net.
     seen: set[tuple] = set()
     raw_count = 0
     while True:
