@@ -1086,6 +1086,90 @@ function CalculatorSection() {
 }
 
 // ===========================================================================
+//  01.8 — Glossary   (key metrics reference)
+// ===========================================================================
+const GLOSSARY_TERMS = [
+  { term: 'Payout Ratio', def: 'Percentage of earnings paid as dividends' },
+  { term: 'YoY Return %', def: 'Year-over-year percentage change in stock price' },
+  { term: 'Dividend Yield %', def: 'Annual dividend per share divided by stock price' },
+  { term: 'Currency Impact %', def: 'Difference between local currency return and INR return' },
+  { term: '52-Week Range', def: 'Highest and lowest price in the past year' },
+  {
+    term: 'Correlation',
+    def: 'Measures how two stocks move together. Near 0 means independent movement',
+  },
+  {
+    term: 'P/E Ratio',
+    def: 'Price divided by earnings per share. Shows how expensive a stock is relative to profits',
+  },
+  { term: 'Sharpe Ratio', def: 'Return earned per unit of risk. Higher is better' },
+  { term: 'ROE', def: 'Return on Equity. Net profit as a percentage of shareholder equity' },
+  { term: 'Market Cap', def: "Total market value of a company's outstanding shares" },
+  {
+    term: 'Debt to Equity',
+    def: 'Ratio of total debt to shareholder equity. Measures financial leverage',
+  },
+  {
+    term: 'Volatility',
+    def: 'Statistical measure of price dispersion. Higher volatility means more risk',
+  },
+];
+
+function GlossarySection() {
+  const [query, setQuery] = useState('');
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return GLOSSARY_TERMS;
+    return GLOSSARY_TERMS.filter(
+      (t) =>
+        t.term.toLowerCase().includes(q) ||
+        t.def.toLowerCase().includes(q),
+    );
+  }, [query]);
+
+  return (
+    <section className="section portfolio-glossary">
+      <div className="container">
+        <SectionTag num="01.8" label="Glossary · Reference" path="/ docs / key-metrics" />
+        <div className="panel-head">
+          <h2>
+            Key metrics — a quick <em>reference</em>.
+          </h2>
+        </div>
+
+        <div className="glossary-search">
+          <span className="prefix">⌕</span>
+          <input
+            type="search"
+            placeholder="Filter terms…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            aria-label="Filter glossary terms"
+          />
+          <span className="count">
+            {filtered.length} / {GLOSSARY_TERMS.length}
+          </span>
+        </div>
+
+        {filtered.length === 0 ? (
+          <div className="glossary-empty">No matching terms.</div>
+        ) : (
+          <div className="glossary-grid">
+            {filtered.map((t) => (
+              <div key={t.term} className="glossary-card">
+                <div className="g-term">{t.term}</div>
+                <div className="g-def">{t.def}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ===========================================================================
 //  Page
 // ===========================================================================
 export default function InvestmentPortfolio() {
@@ -1103,6 +1187,7 @@ export default function InvestmentPortfolio() {
       <DividendSection />
       <CorrelationSection />
       <CalculatorSection />
+      <GlossarySection />
     </>
   );
 }

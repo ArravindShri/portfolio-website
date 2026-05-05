@@ -78,7 +78,8 @@
 .portfolio-regions,
 .portfolio-dividends,
 .portfolio-correlation,
-.portfolio-calculator {
+.portfolio-calculator,
+.portfolio-glossary {
   padding: 40px 0 48px;
 }
 
@@ -576,6 +577,91 @@
   text-align: right;
 }
 
+/* ————— § 01.8 glossary ————— */
+.glossary-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--rule);
+  margin: 4px 0 16px;
+  transition: border-color 120ms ease;
+}
+.glossary-search:focus-within { border-color: var(--accent); }
+.glossary-search .prefix {
+  font-family: var(--mono);
+  color: var(--accent);
+  font-size: 14px;
+}
+.glossary-search input {
+  flex: 1;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  padding: 12px 0;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+.glossary-search input::placeholder { color: var(--ink-4); }
+.glossary-search .count {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--ink-3);
+  text-transform: uppercase;
+}
+
+.glossary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.glossary-card {
+  background: var(--bg-2);
+  border: 1px solid var(--rule);
+  padding: 16px 18px 14px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.glossary-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+  opacity: 0.45;
+}
+.glossary-card .g-term {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.glossary-card .g-def {
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+.glossary-empty {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-3);
+  padding: 24px;
+  text-align: center;
+  border: 1px dashed var(--rule);
+}
+
 /* ————— Responsive ————— */
 @media (max-width: 1100px) {
   .portfolio-hero .hero-row { grid-template-columns: 1fr; gap: 32px; }
@@ -603,13 +689,17 @@
   .portfolio-regions,
   .portfolio-dividends,
   .portfolio-correlation,
-  .portfolio-calculator { padding: 32px 0; }
+  .portfolio-calculator,
+  .portfolio-glossary { padding: 32px 0; }
 
   .calc-grid { grid-template-columns: 1fr; gap: 12px; }
   .calc-inputs,
   .calc-results { padding: 18px 16px 16px; }
   .calc-row .r-val { font-size: 14px; }
   .calc-row.hl .r-val.final { font-size: 18px; }
+
+  .glossary-grid { grid-template-columns: 1fr; }
+  .glossary-card { padding: 14px 14px 12px; }
 
   .panel-head { flex-direction: column; align-items: flex-start; gap: 12px; }
   .panel-head h2 { font-size: clamp(20px, 5.5vw, 26px); max-width: 100%; }
