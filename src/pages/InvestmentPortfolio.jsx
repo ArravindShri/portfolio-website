@@ -214,7 +214,7 @@ function OverviewSection() {
             refreshSchedule="Daily at 3:15 AM IST"
             dataSources={['Twelve Data API', 'yfinance', 'World Bank']}
             pipeline="Fabric Notebooks → dbt → Gold Tables → JSON Export → Vercel CDN"
-            dashboardUrl="https://app.fabric.microsoft.com/view?r=eyJrIjoiMWI2NDBjMGMtNjY3Yy00ZTMzLTkwNjktNThmYjdmNWE4YTYzIiwidCI6ImZlZjEwZjBjLTVkY2MtNDU5OC05N2VkLTY2M2MyYmNlNDJhNSJ9"
+            dashboardUrl="https://app.fabric.microsoft.com/view?r=eyJrIjoiMTU3NDk2NmItOTVmYy00Y2M3LWJmNjMtMzdmOWMzYjhiMjNhIiwidCI6ImZlZjEwZjBjLTVkY2MtNDU5OC05N2VkLTY2M2MyYmNlNDJhNSJ9&pageName=7e08687aed0df37a32c1"
             dashboardLabel="Power BI Dashboard"
           />
           <div className="hero-kpis">
