@@ -1,62 +1,36 @@
 name: Refresh Crisis Snapshot
-
 # Weekly job that re-queries gold_crisis_analysis and updates
-# public/static/energy/crisis.json. Decoupled from the daily export
-# workflow because the view it queries takes 15-30 minutes on Fabric F4
-# trial — too long for the daily 04:00 IST window, fine for a once-weekly
-# job that can wait. See scripts/refresh_crisis.py for full rationale.
-
+# public/static/energy/crisis.json. On Fabric F4 this query took 15-30 min
+# (CU throttling), which is why it was decoupled from the daily export. On
+# BigQuery it returns ~75 rows in under a second — the daily export now also
+# refreshes crisis.json, so this weekly job is effectively a backstop. Kept
+# for the same cadence; see scripts/refresh_crisis.py.
 on:
   schedule:
-    # 23:30 UTC Saturday = 05:00 AM IST Sunday. Runs once a week, after
-    # any Saturday dbt activity has settled and well before Monday's
-    # workload. No collision with the daily export (04:00 IST weekdays
-    # via cron '30 22 * * *').
+    # 23:30 UTC Saturday = 05:00 AM IST Sunday.
     - cron: '30 23 * * 6'
   workflow_dispatch:
-
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    # Job-level safety cap above the 60-min per-query timeout in the
-    # script. GitHub Actions free tier allows up to 6 hours per job;
-    # 75 min is plenty for ODBC install (~20s) + deps (~5s) + query
-    # (≤60 min) + commit (~5s).
-    timeout-minutes: 75
-
+    timeout-minutes: 15
     steps:
       - name: Checkout portfolio-website
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GH_PAT }}
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: Install ODBC Driver 18
-        run: |
-          curl https://packages.microsoft.com/keys/microsoft.asc | sudo tee /etc/apt/trusted.gpg.d/microsoft.asc
-          curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
-          sudo apt-get update
-          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
-
       - name: Install Python dependencies
-        run: pip install pyodbc msal
-
+        run: pip install google-cloud-bigquery
       - name: Refresh crisis.json from gold_crisis_analysis
         env:
-          # Force unbuffered stdout so progress prints stream live in
-          # the GitHub Actions log instead of being held in Python's
-          # 8 KB pipe buffer for the duration of a 30-min query.
           PYTHONUNBUFFERED: '1'
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          FABRIC_SQL_ENDPOINT_P3: ${{ secrets.FABRIC_SQL_ENDPOINT_P3 }}
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
         run: python -u scripts/refresh_crisis.py
-
       - name: Commit and push if changed
         run: |
           git config user.name "github-actions[bot]"
@@ -69,6 +43,6 @@ jobs:
             echo "No crisis.json changes detected"
           else
             TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M UTC")
-            git commit -m "data: refresh crisis snapshot — $TIMESTAMP"
+            git commit -m "data: refresh crisis snapshot - $TIMESTAMP"
             git push origin main
           fi

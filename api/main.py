@@ -22,9 +22,9 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("portfolio.api")
 
 app = FastAPI(
-    title="Shri Arravindhar — Portfolio API",
+    title="Shri Arravindhar - Portfolio API",
     version="1.1.0",
-    description="Live data from two Microsoft Fabric warehouses (P1 + P3) for the React portfolio frontend.",
+    description="Live data from BigQuery (Investment Portfolio + Energy Security) for the React portfolio frontend.",
 )
 
 app.add_middleware(
@@ -43,10 +43,8 @@ app.include_router(contact.router)
 
 
 # ---------------------------------------------------------------------------
-# Memory hygiene. Railway's 1 GB Docker instance is tight for the Azure
-# Identity + MSAL + pyodbc stack, so we (a) GC once after startup to free
-# everything that import-time leaked, and (b) GC every 100 requests to
-# defragment long-running heaps.
+# Memory hygiene. Kept from the Fabric build; harmless on BigQuery and still
+# useful for defragmenting long-running serverless heaps.
 # ---------------------------------------------------------------------------
 @app.on_event("startup")
 async def startup_gc() -> None:
@@ -84,15 +82,8 @@ def root() -> dict[str, Any]:
 
 @app.get("/api/health")
 def health() -> dict[str, Any]:
-    """Show per-warehouse connection status, active method, and cache stats."""
-    # Probe lazily so the response reflects current reality.
-    for mgr in (fabric_portfolio, fabric_energy):
-        if mgr.configured:
-            try:
-                mgr.backend()
-            except Exception:  # noqa: BLE001
-                pass
-
+    """Show per-dataset connection status and cache stats."""
+    # status() runs a live SELECT 1 healthcheck against each dataset.
     portfolio_status = fabric_portfolio.status()
     energy_status = fabric_energy.status()
     cache_stats = cache.stats()

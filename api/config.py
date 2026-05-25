@@ -1,8 +1,14 @@
 """Environment configuration loaded once at import time.
 
-Two Fabric Warehouses are wired in: P1 (Investment Portfolio) and P3
-(Energy Security). They share Service Principal credentials but live in
-different workspaces, so each gets its own SQL endpoint + database name.
+Migrated from two Fabric warehouses (P1 Investment Portfolio, P3 Energy
+Security) to a single BigQuery project with two datasets:
+
+  - Portfolio (P1) gold tables live in dataset `gold_portfolio`
+  - Energy (P3)    gold tables live in dataset `gold`
+
+Auth: a GCP service account. In CI / Vercel set GCP_SERVICE_ACCOUNT_KEY to the
+full JSON key content. For local dev, leave it unset and rely on Application
+Default Credentials (gcloud auth application-default login).
 """
 from __future__ import annotations
 
@@ -22,52 +28,36 @@ def _split_csv(value: str | None) -> list[str]:
 
 @dataclass(frozen=True)
 class Settings:
-    # Project 1 — Investment Portfolio warehouse (pyodbc inputs)
-    fabric_sql_endpoint_p1: str = os.getenv("FABRIC_SQL_ENDPOINT_P1", "")
-    fabric_database_p1: str = os.getenv("FABRIC_DATABASE_P1", "")
-    # Fabric REST API fallback inputs (workspace + warehouse GUIDs)
-    fabric_workspace_id_p1: str = os.getenv("FABRIC_WORKSPACE_ID_P1", "")
-    fabric_warehouse_id_p1: str = os.getenv("FABRIC_WAREHOUSE_ID_P1", "")
+    # GCP project that holds all datasets.
+    gcp_project: str = os.getenv("GCP_PROJECT_ID", "arravind-portfolio")
 
-    # Project 3 — Energy Security warehouse (pyodbc inputs)
-    fabric_sql_endpoint_p3: str = os.getenv("FABRIC_SQL_ENDPOINT_P3", "")
-    fabric_database_p3: str = os.getenv("FABRIC_DATABASE_P3", "")
-    # Fabric REST API fallback inputs (workspace + warehouse GUIDs)
-    fabric_workspace_id_p3: str = os.getenv("FABRIC_WORKSPACE_ID_P3", "")
-    fabric_warehouse_id_p3: str = os.getenv("FABRIC_WAREHOUSE_ID_P3", "")
+    # Service-account key JSON (full content) for headless/CI auth.
+    # Empty -> fall back to Application Default Credentials (local dev).
+    gcp_service_account_key: str = os.getenv("GCP_SERVICE_ACCOUNT_KEY", "")
 
-    # Shared Service Principal credentials
-    fabric_client_id: str = os.getenv("FABRIC_CLIENT_ID", "")
-    fabric_client_secret: str = os.getenv("FABRIC_CLIENT_SECRET", "")
-    fabric_tenant_id: str = os.getenv("FABRIC_TENANT_ID", "")
+    # Default BigQuery datasets per logical "warehouse".
+    portfolio_dataset: str = os.getenv("BQ_PORTFOLIO_DATASET", "gold_portfolio")
+    energy_dataset: str = os.getenv("BQ_ENERGY_DATASET", "gold")
 
     cors_origins: tuple[str, ...] = tuple(
         _split_csv(os.getenv("CORS_ORIGINS")) or ("http://localhost:5173",)
     )
-    connection_mode: str = os.getenv("FABRIC_CONNECTION_MODE", "auto").lower()
     cache_ttl_seconds: int = int(os.getenv("CACHE_TTL_SECONDS", "3600"))
 
     @property
-    def _credentials_set(self) -> bool:
-        return all(
-            (self.fabric_client_id, self.fabric_client_secret, self.fabric_tenant_id)
-        )
+    def credentials_available(self) -> bool:
+        # Either an explicit SA key, or we trust ADC to be present locally.
+        return bool(self.gcp_service_account_key) or bool(
+            os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        ) or True  # ADC may exist without env var (gcloud login)
 
     @property
     def portfolio_configured(self) -> bool:
-        return (
-            self._credentials_set
-            and bool(self.fabric_sql_endpoint_p1)
-            and bool(self.fabric_database_p1)
-        )
+        return bool(self.gcp_project and self.portfolio_dataset)
 
     @property
     def energy_configured(self) -> bool:
-        return (
-            self._credentials_set
-            and bool(self.fabric_sql_endpoint_p3)
-            and bool(self.fabric_database_p3)
-        )
+        return bool(self.gcp_project and self.energy_dataset)
 
 
 settings = Settings()

@@ -1,56 +1,32 @@
-name: Export Fabric Data to Static JSON
-
+name: Export Data to Static JSON
 on:
   schedule:
-    # 22:30 UTC = 04:00 AM IST. Gives the upstream Fabric Notebook + dbt
-    # build (which kicks off at 03:00 AM IST) a full hour of headroom
-    # before the export tries to read the gold tables. Previous schedule
-    # was 21:45 UTC (03:15 AM IST), which collided with a long dbt run
-    # and surfaced as a snapshot-isolation DDL conflict (error 3961) on
-    # gold_stock_performance.
+    # 22:15 UTC = 03:45 AM IST. The upstream dbt build runs earlier; this
+    # gives it headroom before the export reads the gold tables. (On
+    # BigQuery there's no CU contention / snapshot-isolation risk like the
+    # old Fabric setup, but we keep a sensible gap anyway.)
     - cron: '15 22 * * *'
   workflow_dispatch:
-
 jobs:
   export:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout portfolio-website
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GH_PAT }}
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: Install ODBC Driver 18
-        run: |
-          curl https://packages.microsoft.com/keys/microsoft.asc | sudo tee /etc/apt/trusted.gpg.d/microsoft.asc
-          curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
-          sudo apt-get update
-          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
-
       - name: Install Python dependencies
-        run: pip install pyodbc msal
-
+        run: pip install google-cloud-bigquery
       - name: Export Gold tables to JSON
         env:
-          # Force unbuffered stdout/stderr so progress prints appear in
-          # the live GitHub Actions log instead of being held in Python's
-          # 8 KB pipe buffer until the script ends. Without this, a
-          # script stuck on a slow query can look completely silent for
-          # 20+ minutes even though it's running fine.
           PYTHONUNBUFFERED: '1'
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          FABRIC_SQL_ENDPOINT_P1: ${{ secrets.FABRIC_SQL_ENDPOINT_P1 }}
-          FABRIC_SQL_ENDPOINT_P3: ${{ secrets.FABRIC_SQL_ENDPOINT_P3 }}
-        run: python -u scripts/export_fabric_to_json.py
-
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+        run: python -u scripts/export_to_json.py
       - name: Check file sizes
         run: |
           MAX_SIZE=50000000
@@ -59,11 +35,10 @@ jobs:
             echo "ERROR: Files exceed 50MB limit:"
             echo "$LARGE_FILES" | while read f; do
               SIZE=$(stat --printf="%s" "$f")
-              echo "  $f — $(($SIZE / 1024 / 1024))MB"
+              echo "  $f - $(($SIZE / 1024 / 1024))MB"
             done
             exit 1
           fi
-
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
@@ -76,6 +51,6 @@ jobs:
             echo "No data changes detected"
           else
             TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M UTC")
-            git commit -m "data: refresh static JSON — $TIMESTAMP"
+            git commit -m "data: refresh static JSON - $TIMESTAMP"
             git push origin main
           fi
