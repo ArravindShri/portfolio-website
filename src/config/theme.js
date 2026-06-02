@@ -30,6 +30,7 @@ export const fonts = {
 export const navItems = [
   { n: '01', label: 'Home', key: 'home', href: '/' },
   { n: '02', label: 'Projects', key: 'projects', href: '/projects' },
-  { n: '03', label: 'Journey', key: 'journey', href: '/journey' },
-  { n: '04', label: 'Contact', key: 'contact', href: '/contact' },
+  { n: '03', label: 'Writing', key: 'writing', href: '/writing' },
+  { n: '04', label: 'Journey', key: 'journey', href: '/journey' },
+  { n: '05', label: 'Contact', key: 'contact', href: '/contact' },
 ];
