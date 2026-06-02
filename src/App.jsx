@@ -8,6 +8,7 @@ import InvestmentPortfolio from './pages/InvestmentPortfolio.jsx';
 import Writing from './pages/Writing.jsx';
 import Journey from './pages/Journey.jsx';
 import Contact from './pages/Contact.jsx';
+import CaseStudyFabricBigQuery from './pages/CaseStudyFabricBigQuery.jsx';
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
         <Route path="/projects/defense-intelligence" element={<DefenseIntelligence />} />
         <Route path="/projects/investment-portfolio" element={<InvestmentPortfolio />} />
         <Route path="/writing" element={<Writing />} />
+        <Route path="/writing/fabric-bigquery" element={<CaseStudyFabricBigQuery />} />
         <Route path="/journey" element={<Journey />} />
         <Route path="/contact" element={<Contact />} />
       </Route>

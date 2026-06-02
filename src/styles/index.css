@@ -8,6 +8,7 @@
 @import './journey.css';
 @import './contact.css';
 @import './writing.css';
+@import './casestudy.css';
 
 @tailwind base;
 @tailwind components;
